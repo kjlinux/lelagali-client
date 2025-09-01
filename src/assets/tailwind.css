@@ -1,3 +1,78 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Styles personnalisés pour LeLagaLi */
+@layer base {
+  body {
+    font-family: 'Open Sans', 'Roboto', sans-serif;
+    color: #4B2E1E;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Montserrat', 'Poppins', sans-serif;
+  }
+}
+
+@layer components {
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* Personnalisation des composants PrimeVue */
+:root {
+  --primary-color: #47A547;
+  --primary-color-text: #ffffff;
+  --surface-ground: #FDF6EC;
+  --text-color: #4B2E1E;
+}
+
+.p-button-success {
+  background-color: #47A547 !important;
+  border-color: #47A547 !important;
+}
+
+.p-button-warning {
+  background-color: #E6782C !important;
+  border-color: #E6782C !important;
+}
+
+.p-dropdown:not(.p-disabled):hover {
+  border-color: #47A547;
+}
+
+.p-dropdown:not(.p-disabled).p-focus {
+  border-color: #47A547;
+  box-shadow: 0 0 0 0.2rem rgba(71, 165, 71, 0.2);
+}
+
+.p-inputtext:not(.p-disabled):hover {
+  border-color: #47A547;
+}
+
+.p-inputtext:not(.p-disabled).p-focus {
+  border-color: #47A547;
+  box-shadow: 0 0 0 0.2rem rgba(71, 165, 71, 0.2);
+}
+
+.p-slider .p-slider-handle {
+  background-color: #47A547;
+  border-color: #47A547;
+}
+
+.p-slider .p-slider-range {
+  background-color: #47A547;
+}
+
+.p-checkbox .p-checkbox-box.p-highlight {
+  background-color: #47A547;
+  border-color: #47A547;
+}
+
+.p-rating .p-rating-icon.p-rating-icon-active {
+  color: #F8C346;
+}
