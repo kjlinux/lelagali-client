@@ -1,5 +1,5 @@
 {
-    "name": "sakai-vue",
+    "name": "lelagali-client",
     "version": "4.3.0",
     "scripts": {
         "dev": "vite",
