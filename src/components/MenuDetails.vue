@@ -60,7 +60,7 @@ defineEmits(['add-to-cart', 'close']);
 
         <div class="flex space-x-2 pt-4 border-t">
             <Button label="Fermer" text class="flex-1 text-gray-600" @click="$emit('close')" />
-            <Button label="Ajouter au panier" icon="pi pi-shopping-cart" class="flex-1 bg-[#47A547] hover:bg-[#3d8f3d] text-white" @click="$emit('add-to-cart')" :disabled="menu.quantity === 0" />
+            <Button label="Ajouter au panier" icon="pi pi-shopping-cart" class="flex-1 bg-[#47A547] hover:bg-[#3d8f3d] text-white" @click="$emit('add-to-cart', menu)" :disabled="menu.quantity === 0" />
         </div>
     </div>
 </template>

@@ -58,8 +58,8 @@ defineEmits(['add-to-cart', 'view-details']);
 
         <template #footer>
             <div class="flex space-x-2">
-                <Button label="Précommander" icon="pi pi-shopping-cart" class="flex-1 bg-[#47A547] hover:bg-[#3d8f3d] text-white" @click="$emit('add-to-cart')" :disabled="menu.quantity === 0" />
-                <Button icon="pi pi-eye" class="bg-[#E6782C] hover:bg-[#d66a25] text-white" @click="$emit('view-details')" />
+                <Button label="Précommander" icon="pi pi-shopping-cart" class="flex-1 bg-[#47A547] hover:bg-[#3d8f3d] text-white" @click="$emit('add-to-cart', menu)" :disabled="menu.quantity === 0" />
+                <Button icon="pi pi-eye" class="bg-[#E6782C] hover:bg-[#d66a25] text-white" @click="$emit('view-details', menu)" />
             </div>
         </template>
     </Card>

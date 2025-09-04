@@ -46,8 +46,8 @@ const resetFilters = () => {
 
 <template>
     <section class="py-6 bg-white rounded-lg shadow-sm mb-6">
-        <div class="px-6">
-            <div class="flex flex-wrap gap-4 items-center">
+        <div class="px-6 flex justify-center">
+            <div class="flex flex-wrap gap-4 items-center justify-center">
                 <span class="font-semibold text-[#4B2E1E] text-lg">Filtrer par :</span>
 
                 <!-- Quartier Filter -->
@@ -57,7 +57,7 @@ const resetFilters = () => {
                 <Dropdown v-model="localFilters.type" :options="typeOptions" optionLabel="label" optionValue="value" placeholder="Type de plat" class="w-48" @change="emitFilterChange" />
 
                 <!-- Price Range -->
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center space-x-5">
                     <label class="text-[#4B2E1E] font-medium">Prix :</label>
                     <Slider v-model="localFilters.priceRange" :min="0" :max="5000" :step="100" range class="w-32" @change="emitFilterChange" />
                     <span class="text-sm text-gray-600"> {{ localFilters.priceRange[0] }} - {{ localFilters.priceRange[1] }} FCFA </span>

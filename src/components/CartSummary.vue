@@ -11,7 +11,19 @@ const props = defineProps({
 defineEmits(['view-cart']);
 
 const totalPrice = computed(() => {
-    return props.items.reduce((total, item) => total + item.price * item.quantity, 0);
+    console.log('CartSummary items:', props.items); // Debug
+
+    if (!props.items || props.items.length === 0) return 0;
+
+    return props.items.reduce((total, item) => {
+        console.log(`Item: ${item.title}, Price: ${item.price} (${typeof item.price}), Quantity: ${item.quantity} (${typeof item.quantity})`); // Debug
+
+        // Assurez-vous que les valeurs sont des nombres
+        const price = Number(item.price) || 0;
+        const quantity = Number(item.quantity) || 0;
+
+        return total + price * quantity;
+    }, 0);
 });
 </script>
 
