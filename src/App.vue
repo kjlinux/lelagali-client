@@ -7,6 +7,8 @@ import MenuGrid from './components/MenuGrid.vue';
 import CartSummary from './components/CartSummary.vue';
 import CartDetails from './components/CartDetails.vue';
 import MenuDetails from './components/MenuDetails.vue';
+import AuthModal from './components/AuthModal.vue';
+import PaymentModal from './components/PaymentModal.vue';
 import AppFooter from './components/AppFooter.vue';
 import Dialog from 'primevue/dialog';
 import Toast from 'primevue/toast';
@@ -25,7 +27,11 @@ const filters = ref({
 const cartItems = ref([]);
 const showCartDialog = ref(false);
 const showMenuDialog = ref(false);
+const showAuthModal = ref(false);
+const showPaymentModal = ref(false);
 const selectedMenu = ref(null);
+const user = ref({ name: 'Jean Dupont' });
+const orderData = ref(null);
 
 // Pagination state
 const currentPage = ref(0);
@@ -47,7 +53,8 @@ const menus = ref([
         tempsPreparation: '30 min',
         ingredients: ['Attiéké', 'Poisson frais', 'Tomates', 'Oignons', 'Piment'],
         rating: 4.5,
-        reviews: 23
+        reviews: 23,
+        paymentMethods: ['mobile_money', 'wave', 'orange_money', 'cash_delivery', 'cash_pickup']
     },
     {
         id: 2,
@@ -63,7 +70,8 @@ const menus = ref([
         tempsPreparation: '45 min',
         ingredients: ['Riz jasmin', 'Huile de palme', 'Viande de bœuf', 'Légumes variés'],
         rating: 4.8,
-        reviews: 45
+        reviews: 45,
+        paymentMethods: ['mobile_money', 'orange_money', 'cash_delivery']
     },
     {
         id: 3,
@@ -79,7 +87,8 @@ const menus = ref([
         tempsPreparation: '50 min',
         ingredients: ['Igname', 'Arachides', 'Viande de bœuf', 'Épices locales'],
         rating: 4.3,
-        reviews: 18
+        reviews: 18,
+        paymentMethods: ['cash_pickup', 'mobile_money']
     },
     {
         id: 4,
@@ -95,7 +104,8 @@ const menus = ref([
         tempsPreparation: '40 min',
         ingredients: ['Attiéké', 'Poulet fermier', 'Légumes du jardin', 'Épices kedjenou'],
         rating: 4.7,
-        reviews: 32
+        reviews: 32,
+        paymentMethods: ['wave', 'orange_money', 'cash_delivery', 'cash_pickup']
     },
     {
         id: 5,
@@ -111,119 +121,8 @@ const menus = ref([
         tempsPreparation: '35 min',
         ingredients: ['Riz', 'Gombo frais', 'Poisson fumé', 'Crevettes', 'Épices'],
         rating: 4.4,
-        reviews: 28
-    },
-    {
-        id: 6,
-        title: 'Bangui Sauce Graines',
-        description: 'Bangui croustillant servi avec sauce graines riche et parfumée',
-        price: 2400,
-        image: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400&h=300&fit=crop',
-        restauratrice: 'Maman Akissi',
-        quartier: 'Treichville',
-        type: 'bangui',
-        quantity: 10,
-        livraison: true,
-        tempsPreparation: '25 min',
-        ingredients: ['Bangui', 'Graines de palmiste', 'Poisson', 'Légumes'],
-        rating: 4.2,
-        reviews: 15
-    },
-    {
-        id: 7,
-        title: 'Placali Sauce Claire',
-        description: 'Placali moelleux accompagné de sauce claire aux légumes et poisson frais',
-        price: 2200,
-        image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=300&fit=crop',
-        restauratrice: 'Tante Mariama',
-        quartier: 'Adjamé',
-        type: 'placali',
-        quantity: 14,
-        livraison: false,
-        tempsPreparation: '35 min',
-        ingredients: ['Manioc', 'Poisson frais', 'Légumes verts', 'Épices'],
-        rating: 4.0,
-        reviews: 12
-    },
-    {
-        id: 8,
-        title: 'Attiéké Thon Grillé',
-        description: 'Attiéké frais avec thon grillé aux épices et légumes croquants',
-        price: 2600,
-        image: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400&h=300&fit=crop',
-        restauratrice: 'Maman Binta',
-        quartier: 'Marcory',
-        type: 'attiéké',
-        quantity: 20,
-        livraison: true,
-        tempsPreparation: '25 min',
-        ingredients: ['Attiéké', 'Thon frais', 'Légumes', 'Épices grillades'],
-        rating: 4.6,
-        reviews: 38
-    },
-    {
-        id: 9,
-        title: 'Riz Sauce Tomate',
-        description: 'Riz jasmin servi avec sauce tomate maison et morceaux de viande',
-        price: 2300,
-        image: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400&h=300&fit=crop',
-        restauratrice: 'Tantie Aicha',
-        quartier: 'Koumassi',
-        type: 'riz',
-        quantity: 30,
-        livraison: true,
-        tempsPreparation: '30 min',
-        ingredients: ['Riz jasmin', 'Tomates fraîches', 'Viande', 'Oignons'],
-        rating: 4.1,
-        reviews: 22
-    },
-    {
-        id: 10,
-        title: 'Foutou Sauce Épinard',
-        description: "Foutou d'igname accompagné de sauce épinard riche en fer et protéines",
-        price: 2900,
-        image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=300&fit=crop',
-        restauratrice: 'Maman Gnagne',
-        quartier: 'Port-Bouët',
-        type: 'foutou',
-        quantity: 8,
-        livraison: false,
-        tempsPreparation: '40 min',
-        ingredients: ['Igname', 'Épinards frais', 'Poisson fumé', 'Huile de palme'],
-        rating: 4.4,
-        reviews: 19
-    },
-    {
-        id: 11,
-        title: 'Alloco Sauce Piment',
-        description: 'Bananes plantains frites servies avec sauce piment piquante',
-        price: 1800,
-        image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=300&fit=crop',
-        restauratrice: 'Maman Hawa',
-        quartier: 'Abobo',
-        type: 'alloco',
-        quantity: 25,
-        livraison: true,
-        tempsPreparation: '15 min',
-        ingredients: ['Bananes plantains', 'Huile', 'Piment', 'Oignons'],
-        rating: 4.3,
-        reviews: 41
-    },
-    {
-        id: 12,
-        title: 'Garba Complet',
-        description: 'Attiéké avec thon, œuf dur, tomate et avocat - le plat complet',
-        price: 2000,
-        image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=300&fit=crop',
-        restauratrice: 'Frère Moussa',
-        quartier: 'Plateau',
-        type: 'attiéké',
-        quantity: 35,
-        livraison: true,
-        tempsPreparation: '20 min',
-        ingredients: ['Attiéké', 'Thon', 'Œuf', 'Tomate', 'Avocat'],
-        rating: 4.7,
-        reviews: 67
+        reviews: 28,
+        paymentMethods: ['mobile_money', 'wave', 'cash_delivery']
     }
 ]);
 
@@ -269,17 +168,16 @@ const totalCartPrice = computed(() => {
 // Methods
 const handleSearch = (query) => {
     searchQuery.value = query;
-    currentPage.value = 0; // Reset to first page when searching
+    currentPage.value = 0;
 };
 
 const handleFilterChange = (newFilters) => {
     filters.value = { ...filters.value, ...newFilters };
-    currentPage.value = 0; // Reset to first page when filtering
+    currentPage.value = 0;
 };
 
 const onPageChange = (event) => {
     currentPage.value = event.page;
-    // Scroll to top of menu grid
     const menuSection = document.querySelector('#menu-section');
     if (menuSection) {
         menuSection.scrollIntoView({ behavior: 'smooth' });
@@ -341,20 +239,75 @@ const viewMenuDetails = (menu) => {
     showMenuDialog.value = true;
 };
 
-const handleCheckout = () => {
-    // Simulation du processus de commande
+const handleCheckout = (data) => {
+    if (!user.value) {
+        showAuthModal.value = true;
+        orderData.value = data;
+        return;
+    }
+
+    // Préparer les données de commande avec les méthodes de paiement disponibles
+    const uniquePaymentMethods = [...new Set(cartItems.value.flatMap((item) => item.paymentMethods))];
+
+    orderData.value = {
+        ...data,
+        items: cartItems.value,
+        availablePaymentMethods: uniquePaymentMethods
+    };
+
+    showPaymentModal.value = true;
+    showCartDialog.value = false;
+};
+
+const handleAuthSuccess = (userData) => {
+    user.value = userData;
+    showAuthModal.value = false;
+
+    toast.add({
+        severity: 'success',
+        summary: 'Connexion réussie',
+        detail: `Bienvenue ${userData.name} !`,
+        life: 3000
+    });
+
+    // Si il y avait une commande en attente, procéder au paiement
+    if (orderData.value) {
+        const uniquePaymentMethods = [...new Set(cartItems.value.flatMap((item) => item.paymentMethods))];
+
+        orderData.value.availablePaymentMethods = uniquePaymentMethods;
+        showPaymentModal.value = true;
+    }
+};
+
+const handlePaymentSuccess = () => {
     toast.add({
         severity: 'success',
         summary: 'Commande validée',
         detail: 'Votre commande a été transmise aux restauratrices',
         life: 5000
     });
+
+    // Réinitialiser
     cartItems.value = [];
-    showCartDialog.value = false;
+    orderData.value = null;
+    showPaymentModal.value = false;
+};
+
+const handleLogin = () => {
+    showAuthModal.value = true;
+};
+
+const handleLogout = () => {
+    user.value = null;
+    toast.add({
+        severity: 'info',
+        summary: 'Déconnexion',
+        detail: 'À bientôt !',
+        life: 3000
+    });
 };
 
 onMounted(() => {
-    // Simulation du chargement des données
     toast.add({
         severity: 'info',
         summary: 'Bienvenue sur LeLagaLi',
@@ -366,7 +319,7 @@ onMounted(() => {
 
 <template>
     <div id="app" class="min-h-screen bg-[#FDF6EC] flex flex-col">
-        <AppHeader @search="handleSearch" />
+        <AppHeader @search="handleSearch" @login="handleLogin" @logout="handleLogout" :user="user" />
 
         <main class="flex-1">
             <div class="container mx-auto px-4 py-6">
@@ -431,6 +384,12 @@ onMounted(() => {
         <Dialog v-model:visible="showMenuDialog" :header="selectedMenu?.title" :modal="true" :style="{ width: '600px' }" :closable="true">
             <MenuDetails v-if="selectedMenu" :menu="selectedMenu" @add-to-cart="addToCart" @close="showMenuDialog = false" />
         </Dialog>
+
+        <!-- Auth Modal -->
+        <AuthModal v-model:visible="showAuthModal" @auth-success="handleAuthSuccess" />
+
+        <!-- Payment Modal -->
+        <PaymentModal v-model:visible="showPaymentModal" :orderData="orderData" @payment-success="handlePaymentSuccess" @payment-cancel="showPaymentModal = false" />
 
         <!-- Toast Messages -->
         <Toast />
