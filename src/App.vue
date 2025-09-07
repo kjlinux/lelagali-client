@@ -35,7 +35,7 @@ const orderData = ref(null);
 
 // Pagination state
 const currentPage = ref(0);
-const itemsPerPage = ref(10);
+const itemsPerPage = ref(9);
 
 // Sample data - En production, ceci viendrait d'une API
 const menus = ref([
@@ -123,6 +123,109 @@ const menus = ref([
         rating: 4.4,
         reviews: 28,
         paymentMethods: ['mobile_money', 'wave', 'cash_delivery']
+    },
+    // 👇 6 nouveaux plats
+    {
+        id: 6,
+        title: 'Placali Sauce Graine',
+        description: 'Placali à base de farine de manioc accompagné de sauce graine aux poissons fumés',
+        price: 2600,
+        image: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=400&h=300&fit=crop',
+        restauratrice: 'Maman Akissi',
+        quartier: 'Treichville',
+        type: 'placali',
+        quantity: 10,
+        livraison: true,
+        tempsPreparation: '55 min',
+        ingredients: ['Placali', 'Sauce graine', 'Poisson fumé', 'Crabe', 'Épices'],
+        rating: 4.6,
+        reviews: 20,
+        paymentMethods: ['mobile_money', 'cash_delivery', 'cash_pickup']
+    },
+    {
+        id: 7,
+        title: 'Garba Spécial',
+        description: 'Attiéké garba avec thon frit, piment frais et tomate oignon',
+        price: 1500,
+        image: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=400&h=300&fit=crop',
+        restauratrice: 'Moussa Garba',
+        quartier: 'Adjamé',
+        type: 'attiéké',
+        quantity: 50,
+        livraison: false,
+        tempsPreparation: '15 min',
+        ingredients: ['Attiéké', 'Thon frit', 'Piment', 'Tomates', 'Oignons'],
+        rating: 4.2,
+        reviews: 70,
+        paymentMethods: ['cash_pickup']
+    },
+    {
+        id: 8,
+        title: 'Sauce Claire aux Escargots',
+        description: 'Sauce claire traditionnelle servie avec escargots et riz blanc',
+        price: 3500,
+        image: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=400&h=300&fit=crop',
+        restauratrice: 'Tantie Awa',
+        quartier: 'Cocody',
+        type: 'riz',
+        quantity: 8,
+        livraison: true,
+        tempsPreparation: '60 min',
+        ingredients: ['Riz blanc', 'Escargots', 'Aubergines', 'Épices locales'],
+        rating: 4.9,
+        reviews: 15,
+        paymentMethods: ['mobile_money', 'wave', 'cash_delivery']
+    },
+    {
+        id: 9,
+        title: 'Kedjenou de Poisson',
+        description: 'Poisson braisé en kedjenou avec légumes frais, servi avec attiéké',
+        price: 3000,
+        image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop',
+        restauratrice: 'Papa Kader',
+        quartier: 'Marcory',
+        type: 'attiéké',
+        quantity: 14,
+        livraison: true,
+        tempsPreparation: '40 min',
+        ingredients: ['Poisson frais', 'Attiéké', 'Tomates', 'Oignons', 'Piments'],
+        rating: 4.5,
+        reviews: 24,
+        paymentMethods: ['mobile_money', 'orange_money', 'cash_delivery']
+    },
+    {
+        id: 10,
+        title: 'Foutou Banane Sauce Graine',
+        description: 'Foutou banane servi avec une sauce graine onctueuse au poulet fumé',
+        price: 2800,
+        image: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=400&h=300&fit=crop',
+        restauratrice: 'Maman Clémentine',
+        quartier: 'Koumassi',
+        type: 'foutou',
+        quantity: 11,
+        livraison: true,
+        tempsPreparation: '50 min',
+        ingredients: ['Banane plantain', 'Sauce graine', 'Poulet fumé', 'Épices'],
+        rating: 4.7,
+        reviews: 19,
+        paymentMethods: ['wave', 'cash_delivery', 'cash_pickup']
+    },
+    {
+        id: 11,
+        title: 'Riz Sauce Aubergine',
+        description: 'Riz blanc accompagné de sauce aubergine avec poisson fumé et viande',
+        price: 2700,
+        image: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=400&h=300&fit=crop',
+        restauratrice: 'Maman Fanta',
+        quartier: 'Abobo',
+        type: 'riz',
+        quantity: 22,
+        livraison: true,
+        tempsPreparation: '45 min',
+        ingredients: ['Riz blanc', 'Aubergine', 'Poisson fumé', 'Viande', 'Épices locales'],
+        rating: 4.4,
+        reviews: 25,
+        paymentMethods: ['mobile_money', 'cash_delivery']
     }
 ]);
 

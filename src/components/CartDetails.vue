@@ -50,10 +50,10 @@ const totalPrice = computed(() => {
                 </div>
 
                 <div class="space-y-3">
-                    <div class="flex items-center space-x-2">
+                    <!-- <div class="flex items-center space-x-2">
                         <Checkbox v-model="deliveryMode" inputId="delivery" :binary="true" />
                         <label for="delivery" class="text-[#4B2E1E]">Livraison (+500 FCFA)</label>
-                    </div>
+                    </div> -->
 
                     <Button label="Valider la commande" icon="pi pi-check" class="w-full bg-[#47A547] hover:bg-[#3d8f3d] text-white p-3" @click="$emit('checkout')" :disabled="items.length === 0" />
                 </div>
