@@ -1,237 +1,408 @@
 <script setup>
-import { ref, reactive, watch, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import Dialog from 'primevue/dialog';
+import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
-import Checkbox from 'primevue/checkbox';
-import Dropdown from 'primevue/dropdown';
-import Button from 'primevue/button';
+import Message from 'primevue/message';
 import Divider from 'primevue/divider';
+import { useToast } from 'primevue/usetoast';
 
-// Props
 const props = defineProps({
-    visible: Boolean
+    visible: {
+        type: Boolean,
+        default: false
+    }
 });
 
-// Emits
-const emit = defineEmits(['update:visible']);
+const emit = defineEmits(['update:visible', 'auth-success']);
 
-// États réactifs
-const isRegistering = ref(false);
-const loading = ref(false);
-const localVisible = computed({
+const toast = useToast();
+
+// État du modal
+const isVisible = computed({
     get: () => props.visible,
     set: (value) => emit('update:visible', value)
 });
 
-// Formulaires
-const loginForm = reactive({
-    emailOrPhone: '',
-    password: '',
-    rememberMe: false
+const isLoginMode = ref(true);
+const isLoading = ref(false);
+const errorMessage = ref('');
+
+// Données du formulaire de connexion
+const loginForm = ref({
+    identifier: '', // email ou téléphone
+    password: ''
 });
 
-const registerForm = reactive({
-    firstName: '',
-    lastName: '',
-    email: '',
+// Données du formulaire d'inscription
+const registerForm = ref({
+    name: '',
     phone: '',
-    quartier: null,
+    email: '',
     password: '',
-    confirmPassword: '',
-    acceptTerms: false
+    confirmPassword: ''
 });
 
-// Erreurs
-const errors = reactive({});
+// Validation des formulaires
+const loginValidation = computed(() => {
+    const errors = [];
 
-// Options de quartier
-const quartierOptions = ref(['Cocody', 'Abobo', 'Adjamé', 'Plateau', 'Yopougon', 'Autre']);
-
-// Validation
-const validateForm = () => {
-    Object.keys(errors).forEach((key) => delete errors[key]);
-
-    if (!isRegistering.value) {
-        // Validation connexion
-        if (!loginForm.emailOrPhone) errors.emailOrPhone = 'Ce champ est requis';
-        if (!loginForm.password) errors.password = 'Ce champ est requis';
-    } else {
-        // Validation inscription
-        if (!registerForm.firstName) errors.firstName = 'Ce champ est requis';
-        if (!registerForm.lastName) errors.lastName = 'Ce champ est requis';
-        if (!registerForm.email) errors.email = 'Ce champ est requis';
-        if (!registerForm.phone) errors.phone = 'Ce champ est requis';
-        if (!registerForm.quartier) errors.quartier = 'Ce champ est requis';
-
-        if (!registerForm.password) {
-            errors.password = 'Ce champ est requis';
-        } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}/.test(registerForm.password)) {
-            errors.password = 'Le mot de passe ne respecte pas les exigences de sécurité';
-        }
-
-        if (registerForm.password !== registerForm.confirmPassword) {
-            errors.confirmPassword = 'Les mots de passe ne correspondent pas';
-        }
-
-        if (!registerForm.acceptTerms) errors.acceptTerms = 'Vous devez accepter les conditions';
+    if (!loginForm.value.identifier.trim()) {
+        errors.push('Veuillez saisir votre email ou téléphone');
     }
 
-    return Object.keys(errors).length === 0;
+    if (!loginForm.value.password.trim()) {
+        errors.push('Veuillez saisir votre mot de passe');
+    }
+
+    return {
+        isValid: errors.length === 0,
+        errors
+    };
+});
+
+const registerValidation = computed(() => {
+    const errors = [];
+
+    if (!registerForm.value.name.trim()) {
+        errors.push('Veuillez saisir votre nom');
+    }
+
+    // Au moins un des deux : email ou téléphone
+    if (!registerForm.value.email.trim() && !registerForm.value.phone.trim()) {
+        errors.push('Veuillez saisir un email ou un numéro de téléphone');
+    }
+
+    // Validation email si fourni
+    if (registerForm.value.email.trim()) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(registerForm.value.email)) {
+            errors.push('Adresse email invalide');
+        }
+    }
+
+    // Validation téléphone si fourni (format international ou local CI)
+    if (registerForm.value.phone.trim()) {
+        const phoneRegex = /^(\+225|225|0)?[0-9]{8,10}$/;
+        if (!phoneRegex.test(registerForm.value.phone.replace(/\s+/g, ''))) {
+            errors.push('Numéro de téléphone invalide');
+        }
+    }
+
+    if (!registerForm.value.password.trim()) {
+        errors.push('Veuillez saisir un mot de passe');
+    } else if (registerForm.value.password.length < 6) {
+        errors.push('Le mot de passe doit contenir au moins 6 caractères');
+    }
+
+    if (registerForm.value.password !== registerForm.value.confirmPassword) {
+        errors.push('Les mots de passe ne correspondent pas');
+    }
+
+    return {
+        isValid: errors.length === 0,
+        errors
+    };
+});
+
+// Méthodes
+const toggleMode = () => {
+    isLoginMode.value = !isLoginMode.value;
+    resetForms();
+    errorMessage.value = '';
 };
 
-// Soumission du formulaire
-const handleSubmit = async () => {
-    if (!validateForm()) return;
+const resetForms = () => {
+    loginForm.value = {
+        identifier: '',
+        password: ''
+    };
 
-    loading.value = true;
+    registerForm.value = {
+        name: '',
+        phone: '',
+        email: '',
+        password: '',
+        confirmPassword: ''
+    };
+};
+
+const handleLogin = async () => {
+    if (!loginValidation.value.isValid) {
+        errorMessage.value = loginValidation.value.errors[0];
+        return;
+    }
+
+    isLoading.value = true;
+    errorMessage.value = '';
 
     try {
-        if (isRegistering.value) {
-            // Logique d'inscription
-            console.log('Register payload:', registerForm);
-            // await authService.register(registerForm);
-        } else {
-            // Logique de connexion
-            console.log('Login payload:', loginForm);
-            // await authService.login(loginForm);
-        }
+        // Simulation d'un appel API
+        await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        // Fermer la modal après succès
-        localVisible.value = false;
+        // Vérification simple (en production, ceci serait une vraie API)
+        if (loginForm.value.identifier === 'test@example.com' && loginForm.value.password === 'password') {
+            const userData = {
+                id: 1,
+                name: 'Jean Dupont',
+                email: 'test@example.com',
+                phone: '+225 07 08 09 10 11'
+            };
+
+            emit('auth-success', userData);
+            resetForms();
+        } else {
+            errorMessage.value = 'Identifiants incorrects';
+        }
     } catch (error) {
-        console.error("Erreur d'authentification:", error);
+        errorMessage.value = 'Une erreur est survenue lors de la connexion';
     } finally {
-        loading.value = false;
+        isLoading.value = false;
     }
 };
 
-// Réinitialiser les formulaires quand la modal se ferme
-watch(localVisible, (visible) => {
-    if (!visible) {
-        Object.keys(loginForm).forEach((key) => (loginForm[key] = ''));
-        Object.keys(registerForm).forEach((key) => (registerForm[key] = ''));
-        Object.keys(errors).forEach((key) => delete errors[key]);
+const handleRegister = async () => {
+    if (!registerValidation.value.isValid) {
+        errorMessage.value = registerValidation.value.errors[0];
+        return;
     }
-});
+
+    isLoading.value = true;
+    errorMessage.value = '';
+
+    try {
+        // Simulation d'un appel API
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+
+        const userData = {
+            id: Date.now(),
+            name: registerForm.value.name,
+            email: registerForm.value.email || null,
+            phone: registerForm.value.phone || null
+        };
+
+        toast.add({
+            severity: 'success',
+            summary: 'Compte créé',
+            detail: 'Votre compte a été créé avec succès',
+            life: 3000
+        });
+
+        emit('auth-success', userData);
+        resetForms();
+    } catch (error) {
+        errorMessage.value = 'Une erreur est survenue lors de la création du compte';
+    } finally {
+        isLoading.value = false;
+    }
+};
+
+// Réinitialiser les formulaires quand le modal se ferme
+watch(
+    () => props.visible,
+    (newValue) => {
+        if (!newValue) {
+            resetForms();
+            errorMessage.value = '';
+            isLoginMode.value = true;
+        }
+    }
+);
 </script>
 
 <template>
-    <Dialog v-model:visible="localVisible" header="Authentification" :modal="true" :style="{ width: '450px' }" :closable="true" class="auth-modal">
-        <div class="auth-container">
-            <!-- Toggle Buttons -->
-            <div class="flex mb-6 bg-gray-100 rounded-lg p-1">
-                <Button :label="'Connexion'" :class="['flex-1', 'py-2', { 'bg-[#47A547] text-white': !isRegistering, 'bg-transparent text-gray-600': isRegistering }]" @click="isRegistering = false" text />
-                <Button :label="'Inscription'" :class="['flex-1', 'py-2', { 'bg-[#47A547] text-white': isRegistering, 'bg-transparent text-gray-600': !isRegistering }]" @click="isRegistering = true" text />
+    <Dialog v-model:visible="isVisible" modal :closable="true" :style="{ width: '480px' }" class="auth-modal" :header="null">
+        <div class="p-6">
+            <!-- En-tête -->
+            <div class="text-center mb-6">
+                <div class="flex justify-center mb-4">
+                    <img src="/pic.jpg" alt="LeLagaLi" class="w-16 h-16 object-cover" />
+                </div>
+                <h2 class="text-2xl font-bold text-[#4B2E1E] mb-2">
+                    {{ isLoginMode ? 'Connexion' : 'Créer un compte' }}
+                </h2>
+                <p class="text-gray-600">
+                    {{ isLoginMode ? 'Connectez-vous pour commander vos plats préférés' : 'Rejoignez LeLagaLi et découvrez nos saveurs authentiques' }}
+                </p>
             </div>
 
-            <!-- Login Form -->
-            <form @submit.prevent="handleSubmit" v-if="!isRegistering" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-[#4B2E1E] mb-2">Email ou Téléphone</label>
-                    <InputText v-model="loginForm.emailOrPhone" placeholder="Entrez votre email ou numéro" class="w-full p-3" :class="{ 'p-invalid': errors.emailOrPhone }" required />
-                    <small v-if="errors.emailOrPhone" class="text-red-500">{{ errors.emailOrPhone }}</small>
+            <!-- Messages d'erreur -->
+            <Message v-if="errorMessage" severity="error" :closable="false" class="mb-4">
+                {{ errorMessage }}
+            </Message>
+
+            <!-- Formulaire de connexion -->
+            <form v-if="isLoginMode" @submit.prevent="handleLogin" class="space-y-4">
+                <div class="field">
+                    <label for="identifier" class="block text-sm font-medium text-[#4B2E1E] mb-2"> Email ou numéro de téléphone </label>
+                    <InputText id="identifier" v-model="loginForm.identifier" placeholder="exemple@email.com ou +225 XX XX XX XX" class="w-full p-3" :class="{ 'p-invalid': !loginValidation.isValid && loginForm.identifier }" />
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-[#4B2E1E] mb-2">Mot de passe</label>
-                    <Password v-model="loginForm.password" placeholder="Entrez votre mot de passe" :feedback="false" toggleMask class="w-full" :class="{ 'p-invalid': errors.password }" required />
-                    <small v-if="errors.password" class="text-red-500">{{ errors.password }}</small>
+                <div class="field">
+                    <label for="loginPassword" class="block text-sm font-medium text-[#4B2E1E] mb-2"> Mot de passe </label>
+                    <Password
+                        id="loginPassword"
+                        v-model="loginForm.password"
+                        placeholder="Votre mot de passe"
+                        class="w-full"
+                        inputClass="w-full p-3"
+                        :feedback="false"
+                        toggleMask
+                        :class="{ 'p-invalid': !loginValidation.isValid && loginForm.password }"
+                    />
                 </div>
 
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center">
-                        <Checkbox v-model="loginForm.rememberMe" inputId="remember" :binary="true" />
-                        <label for="remember" class="ml-2 text-sm text-[#4B2E1E]">Se souvenir de moi</label>
-                    </div>
-                    <Button label="Mot de passe oublié ?" text class="text-[#47A547] text-sm p-0" />
-                </div>
-
-                <Button type="submit" label="Se connecter" :loading="loading" class="w-full bg-[#47A547] hover:bg-[#3d8f3d] text-white p-3 mt-4" />
+                <Button type="submit" label="Se connecter" class="w-full p-3 bg-[#47A547] hover:bg-[#3d8b3d] text-white font-semibold" :loading="isLoading" :disabled="isLoading" />
             </form>
 
-            <!-- Register Form -->
-            <form @submit.prevent="handleSubmit" v-else class="space-y-4">
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-sm font-medium text-[#4B2E1E] mb-2">Prénom</label>
-                        <InputText v-model="registerForm.firstName" placeholder="Prénom" class="w-full p-2" :class="{ 'p-invalid': errors.firstName }" required />
-                        <small v-if="errors.firstName" class="text-red-500">{{ errors.firstName }}</small>
+            <!-- Formulaire d'inscription -->
+            <form v-else @submit.prevent="handleRegister" class="space-y-4">
+                <div class="field">
+                    <label for="name" class="block text-sm font-medium text-[#4B2E1E] mb-2"> Nom complet * </label>
+                    <InputText id="name" v-model="registerForm.name" placeholder="Votre nom complet" class="w-full p-3" :class="{ 'p-invalid': !registerValidation.isValid && !registerForm.name }" />
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="field">
+                        <label for="phone" class="block text-sm font-medium text-[#4B2E1E] mb-2"> Numéro de téléphone </label>
+                        <InputText id="phone" v-model="registerForm.phone" placeholder="+225 XX XX XX XX" class="w-full p-3" :class="{ 'p-invalid': !registerValidation.isValid && registerForm.phone }" />
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-[#4B2E1E] mb-2">Nom</label>
-                        <InputText v-model="registerForm.lastName" placeholder="Nom" class="w-full p-2" :class="{ 'p-invalid': errors.lastName }" required />
-                        <small v-if="errors.lastName" class="text-red-500">{{ errors.lastName }}</small>
+
+                    <div class="field">
+                        <label for="email" class="block text-sm font-medium text-[#4B2E1E] mb-2"> Adresse email </label>
+                        <InputText id="email" v-model="registerForm.email" placeholder="exemple@email.com" type="email" class="w-full p-3" :class="{ 'p-invalid': !registerValidation.isValid && registerForm.email }" />
                     </div>
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-[#4B2E1E] mb-2">Email</label>
-                    <InputText v-model="registerForm.email" type="email" placeholder="votre@email.com" class="w-full p-3" :class="{ 'p-invalid': errors.email }" required />
-                    <small v-if="errors.email" class="text-red-500">{{ errors.email }}</small>
+                <p class="text-xs text-gray-500">* Au moins un numéro de téléphone ou une adresse email est requis</p>
+
+                <div class="field">
+                    <label for="password" class="block text-sm font-medium text-[#4B2E1E] mb-2"> Mot de passe * </label>
+                    <Password
+                        id="password"
+                        v-model="registerForm.password"
+                        placeholder="Minimum 6 caractères"
+                        class="w-full"
+                        inputClass="w-full p-3"
+                        promptLabel="Entrez un mot de passe"
+                        weakLabel="Faible"
+                        mediumLabel="Moyen"
+                        strongLabel="Fort"
+                        toggleMask
+                        :class="{ 'p-invalid': !registerValidation.isValid && registerForm.password }"
+                    />
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-[#4B2E1E] mb-2">Téléphone</label>
-                    <InputText v-model="registerForm.phone" placeholder="Ex: +225 01 02 03 04 05" class="w-full p-3" :class="{ 'p-invalid': errors.phone }" required />
-                    <small v-if="errors.phone" class="text-red-500">{{ errors.phone }}</small>
+                <div class="field">
+                    <label for="confirmPassword" class="block text-sm font-medium text-[#4B2E1E] mb-2"> Confirmer le mot de passe * </label>
+                    <Password
+                        id="confirmPassword"
+                        v-model="registerForm.confirmPassword"
+                        placeholder="Confirmez votre mot de passe"
+                        class="w-full"
+                        inputClass="w-full p-3"
+                        :feedback="false"
+                        toggleMask
+                        :class="{ 'p-invalid': !registerValidation.isValid && registerForm.confirmPassword }"
+                    />
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-[#4B2E1E] mb-2">Quartier</label>
-                    <Dropdown v-model="registerForm.quartier" :options="quartierOptions" placeholder="Sélectionnez votre quartier" class="w-full" :class="{ 'p-invalid': errors.quartier }" />
-                    <small v-if="errors.quartier" class="text-red-500">{{ errors.quartier }}</small>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-[#4B2E1E] mb-2">Mot de passe</label>
-                    <Password v-model="registerForm.password" placeholder="Créez un mot de passe" :feedback="true" toggleMask class="w-full" :class="{ 'p-invalid': errors.password }" required>
-                        <template #footer>
-                            <Divider />
-                            <p class="mt-2 text-sm">Suggestions :</p>
-                            <ul class="pl-2 ml-2 mt-0 line-height-3 text-sm">
-                                <li>Au moins une minuscule</li>
-                                <li>Au moins une majuscule</li>
-                                <li>Au moins un chiffre</li>
-                                <li>Minimum 8 caractères</li>
-                            </ul>
-                        </template>
-                    </Password>
-                    <small v-if="errors.password" class="text-red-500">{{ errors.password }}</small>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-[#4B2E1E] mb-2">Confirmer le mot de passe</label>
-                    <Password v-model="registerForm.confirmPassword" placeholder="Confirmez le mot de passe" :feedback="false" toggleMask class="w-full" :class="{ 'p-invalid': errors.confirmPassword }" required />
-                    <small v-if="errors.confirmPassword" class="text-red-500">{{ errors.confirmPassword }}</small>
-                </div>
-
-                <div class="flex items-start">
-                    <Checkbox v-model="registerForm.acceptTerms" inputId="terms" :binary="true" class="mt-1" />
-                    <label for="terms" class="ml-2 text-sm text-[#4B2E1E]">
-                        J'accepte les <a href="#" class="text-[#47A547] underline">conditions d'utilisation</a> et la <a href="#" class="text-[#47A547] underline">politique de confidentialité</a>
-                    </label>
-                </div>
-                <small v-if="errors.acceptTerms" class="text-red-500">{{ errors.acceptTerms }}</small>
-
-                <Button type="submit" label="Créer mon compte" :loading="loading" class="w-full bg-[#47A547] hover:bg-[#3d8f3d] text-white p-3 mt-4" />
+                <Button type="submit" label="Créer mon compte" class="w-full p-3 bg-[#E6782C] hover:bg-[#d66a25] text-white font-semibold" :loading="isLoading" :disabled="isLoading" />
             </form>
 
-            <!-- Social Login -->
-            <div class="mt-6">
-                <div class="relative">
-                    <div class="absolute inset-0 flex items-center">
-                        <div class="w-full border-t border-gray-300" />
-                    </div>
-                    <div class="relative flex justify-center text-sm">
-                        <span class="px-2 bg-white text-gray-500">Ou continuer avec</span>
-                    </div>
-                </div>
+            <!-- Séparateur et changement de mode -->
+            <Divider class="my-6" />
 
-                <div class="mt-4 grid grid-cols-2 gap-3">
-                    <Button label="Google" icon="pi pi-google" class="w-full border border-gray-300 text-gray-700 hover:bg-gray-50" text />
-                    <Button label="Facebook" icon="pi pi-facebook" class="w-full border border-gray-300 text-gray-700 hover:bg-gray-50" text />
-                </div>
-            </div></div
-    ></Dialog>
+            <div class="text-center">
+                <p class="text-gray-600 mb-3">
+                    {{ isLoginMode ? "Vous n'avez pas de compte ?" : 'Vous avez déjà un compte ?' }}
+                </p>
+                <Button :label="isLoginMode ? 'Créer un compte' : 'Se connecter'" text class="text-[#47A547] hover:text-[#3d8b3d] font-semibold" @click="toggleMode" :disabled="isLoading" />
+            </div>
+
+            <!-- Connexion rapide pour demo -->
+            <div v-if="isLoginMode" class="mt-6 p-4 bg-gray-50 rounded-lg">
+                <p class="text-xs text-gray-600 mb-2">Pour tester rapidement :</p>
+                <p class="text-xs text-gray-500">
+                    Email: <strong>test@example.com</strong><br />
+                    Mot de passe: <strong>password</strong>
+                </p>
+            </div>
+        </div>
+    </Dialog>
 </template>
+
+<style scoped>
+.auth-modal :deep(.p-dialog-header) {
+    display: none;
+}
+
+.auth-modal :deep(.p-dialog-content) {
+    padding: 0;
+    border-radius: 12px;
+}
+
+.field {
+    margin-bottom: 1rem;
+}
+
+.field label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #4b2e1e;
+}
+
+/* Styles pour les champs invalides */
+:deep(.p-invalid) {
+    border-color: #ef4444 !important;
+}
+
+/* Styles pour les boutons */
+:deep(.p-button) {
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+:deep(.p-button:focus) {
+    box-shadow: 0 0 0 2px rgba(71, 165, 71, 0.2);
+}
+
+/* Styles pour les champs de saisie */
+:deep(.p-inputtext) {
+    border-radius: 8px;
+    border: 2px solid #e5e7eb;
+    transition: border-color 0.2s;
+}
+
+:deep(.p-inputtext:focus) {
+    border-color: #47a547;
+    box-shadow: 0 0 0 2px rgba(71, 165, 71, 0.1);
+}
+
+/* Styles pour le composant Password */
+:deep(.p-password) {
+    display: block;
+    width: 100%;
+}
+
+:deep(.p-password .p-inputtext) {
+    width: 100%;
+}
+
+/* Animation de chargement */
+:deep(.p-button-loading .p-button-icon) {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+</style>
