@@ -693,4 +693,41 @@ const handleLogout = () => {
     color: var(--lelagali-brown);
     font-weight: 600;
 }
+
+:root {
+    --lelagali-green: #47a547;
+    --lelagali-green-50: #f2f8f2;
+    --lelagali-green-100: #e4f2e4;
+    --lelagali-green-200: #c9e4c9;
+    --lelagali-green-300: #aed7ae;
+    --lelagali-green-400: #93c993;
+    --lelagali-green-500: #47a547;
+    --lelagali-green-600: #3a843a;
+    --lelagali-green-700: #2d632d;
+    --lelagali-green-800: #204220;
+    --lelagali-green-900: #132113;
+    --lelagali-green-950: #060f06;
+}
+
+.p-button-success {
+    background-color: var(--lelagali-green) !important;
+    border-color: var(--lelagali-green) !important;
+}
+
+.p-button-success:hover {
+    background-color: var(--lelagali-green-600) !important;
+    border-color: var(--lelagali-green-600) !important;
+}
+
+.text-lelagali-green {
+    color: var(--lelagali-green);
+}
+
+.bg-lelagali-green {
+    background-color: var(--lelagali-green);
+}
+
+.border-lelagali-green {
+    border-color: var(--lelagali-green);
+}
 </style>
