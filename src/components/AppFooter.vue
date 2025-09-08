@@ -56,11 +56,11 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="flex items-center space-x-3">
                         <i class="pi pi-phone text-[#E6782C]"></i>
-                        <span class="text-gray-300">+225 07 XX XX XX XX</span>
+                        <span class="text-gray-300">+226 07 XX XX XX XX</span>
                     </div>
                     <div class="flex items-center space-x-3">
                         <i class="pi pi-envelope text-[#E6782C]"></i>
-                        <span class="text-gray-300">contact@lelagali.ci</span>
+                        <span class="text-gray-300">contact@lelagali.com</span>
                     </div>
                     <div class="flex items-center space-x-3">
                         <i class="pi pi-map-marker text-[#E6782C]"></i>
@@ -73,7 +73,7 @@
             <div class="border-t border-gray-600 mt-8 pt-6 text-center">
                 <p class="text-gray-300">
                     © {{ new Date().getFullYear() }} LeLagaLi. Tous droits réservés.
-                    <span class="text-[#F8C346]">Fait avec ❤️ en Côte d'Ivoire By Tanga Group</span>
+                    <span class="text-[#F8C346]">Fait avec ❤️ By Tanga Group</span>
                 </p>
             </div>
         </div>
