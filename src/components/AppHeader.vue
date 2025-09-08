@@ -2,12 +2,17 @@
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Menu from 'primevue/menu';
+import Badge from 'primevue/badge';
 import { ref } from 'vue';
 
 const props = defineProps({
     user: {
         type: Object,
         default: null
+    },
+    pendingOrdersCount: {
+        type: Number,
+        default: 0
     }
 });
 
@@ -20,7 +25,7 @@ const userMenuItems = ref([
         label: 'Mes commandes',
         icon: 'pi pi-shopping-bag',
         command: () => {
-            // Navigation vers les commandes
+            emit('show-orders');
         }
     },
     {
@@ -42,7 +47,7 @@ const userMenuItems = ref([
     }
 ]);
 
-const emit = defineEmits(['search', 'login', 'logout']);
+const emit = defineEmits(['search', 'login', 'logout', 'show-orders']);
 
 const toggleUserMenu = (event) => {
     userMenu.value.toggle(event);
@@ -61,8 +66,10 @@ const toggleUserMenu = (event) => {
                 <!-- Navigation Desktop -->
                 <nav class="hidden md:flex space-x-6">
                     <Button label="Accueil" text class="text-[#4B2E1E] hover:text-[#47A547] font-medium" />
-                    <!-- <Button label="Menus" text class="text-[#4B2E1E] hover:text-[#47A547] font-medium" /> -->
-                    <Button label="Mes commandes" text class="text-[#4B2E1E] hover:text-[#47A547] font-medium" />
+                    <div class="relative">
+                        <Button label="Mes commandes" text class="text-[#4B2E1E] hover:text-[#47A547] font-medium" @click="$emit('show-orders')" />
+                        <Badge v-if="pendingOrdersCount > 0" :value="pendingOrdersCount" class="absolute -top-2 -right-2 bg-[#E6782C]" />
+                    </div>
                 </nav>
 
                 <!-- Search Bar Mobile -->
@@ -144,5 +151,13 @@ const toggleUserMenu = (event) => {
 
 :deep(.p-menuitem-link:hover .p-menuitem-icon) {
     color: #47a547;
+}
+
+/* Style pour le badge de notification */
+:deep(.p-badge) {
+    min-width: 1.2rem;
+    height: 1.2rem;
+    line-height: 1.2rem;
+    font-size: 0.75rem;
 }
 </style>

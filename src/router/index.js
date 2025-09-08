@@ -11,7 +11,12 @@ const router = createRouter({
                 {
                     path: '/',
                     name: 'dashboard',
-                    component: () => import('@/views/Dashboard.vue')
+                    component: () => import('@/App.vue')
+                },
+                {
+                    path: '/mes-commandes',
+                    name: 'OrdersHistory',
+                    component: () => import('@/components/OrdersHistory.vue')
                 },
                 {
                     path: '/uikit/formlayout',
