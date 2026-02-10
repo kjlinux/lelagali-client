@@ -28,8 +28,10 @@ class AuthService {
 
             const response = await api.post('/auth/login', payload, { auth: false });
 
-            if (response.status === 'success' && response.data) {
-                const { token, user } = response.data;
+            if (response.status === 'success') {
+                // Le backend retourne : { status, code, access_token, token_type, expires_in, profile }
+                const token = response.access_token;
+                const user = response.profile;
 
                 // Sauvegarder le token et l'utilisateur
                 api.setToken(token);
@@ -69,9 +71,15 @@ class AuthService {
             const response = await api.post('/auth/users', payload, { auth: false });
 
             if (response.status === 'success' && response.data) {
-                // Après l'inscription, se connecter automatiquement
-                const loginIdentifier = userData.email || userData.phone;
-                return await this.login(loginIdentifier, userData.password);
+                // Le backend retourne déjà le token après l'inscription
+                const user = response.data;
+                const token = response.token;
+
+                // Sauvegarder le token et l'utilisateur
+                api.setToken(token);
+                api.setUser(user);
+
+                return { user, token };
             }
 
             throw new Error(response.message || 'Erreur lors de la création du compte');

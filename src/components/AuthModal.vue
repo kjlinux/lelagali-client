@@ -83,11 +83,11 @@ const registerValidation = computed(() => {
         }
     }
 
-    // Validation téléphone si fourni (format international ou local CI)
+    // Validation téléphone si fourni (format burkinabè)
     if (registerForm.value.phone.trim()) {
-        const phoneRegex = /^(\+225|225|0)?[0-9]{8,10}$/;
+        const phoneRegex = /^0[0-9]{8,9}$/;
         if (!phoneRegex.test(registerForm.value.phone.replace(/\s+/g, ''))) {
-            errors.push('Numéro de téléphone invalide');
+            errors.push('Numéro de téléphone invalide (format: 0XX XX XX XX)');
         }
     }
 
@@ -141,11 +141,26 @@ const handleLogin = async () => {
     try {
         const { user } = await authService.login(loginForm.value.identifier, loginForm.value.password);
 
+        toast.add({
+            severity: 'success',
+            summary: 'Connexion réussie',
+            detail: `Bienvenue ${user.name} !`,
+            life: 3000
+        });
+
         emit('auth-success', user);
         resetForms();
+        isVisible.value = false;
     } catch (error) {
         console.error('Login error:', error);
-        errorMessage.value = error.message || 'Identifiants incorrects';
+
+        // Afficher l'erreur via toast au lieu de errorMessage
+        toast.add({
+            severity: 'error',
+            summary: 'Erreur de connexion',
+            detail: error.message || 'Identifiants incorrects',
+            life: 5000
+        });
     } finally {
         isLoading.value = false;
     }
@@ -172,9 +187,17 @@ const handleRegister = async () => {
 
         emit('auth-success', user);
         resetForms();
+        isVisible.value = false;
     } catch (error) {
         console.error('Register error:', error);
-        errorMessage.value = error.message || 'Une erreur est survenue lors de la création du compte';
+
+        // Afficher l'erreur via toast au lieu de errorMessage
+        toast.add({
+            severity: 'error',
+            summary: 'Erreur d\'inscription',
+            detail: error.message || 'Une erreur est survenue lors de la création du compte',
+            life: 5000
+        });
     } finally {
         isLoading.value = false;
     }
@@ -218,7 +241,7 @@ watch(
             <form v-if="isLoginMode" @submit.prevent="handleLogin" class="space-y-4">
                 <div class="field">
                     <label for="identifier" class="block text-sm font-medium text-[#4B2E1E] mb-2"> Email ou numéro de téléphone </label>
-                    <InputText id="identifier" v-model="loginForm.identifier" placeholder="exemple@email.com ou +225 XX XX XX XX" class="w-full p-3" :class="{ 'p-invalid': !loginValidation.isValid && loginForm.identifier }" />
+                    <InputText id="identifier" v-model="loginForm.identifier" placeholder="exemple@email.com ou 070 00 00 01" class="w-full p-3" :class="{ 'p-invalid': !loginValidation.isValid && loginForm.identifier }" />
                 </div>
 
                 <div class="field">
@@ -248,7 +271,7 @@ watch(
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="field">
                         <label for="phone" class="block text-sm font-medium text-[#4B2E1E] mb-2"> Numéro de téléphone </label>
-                        <InputText id="phone" v-model="registerForm.phone" placeholder="+225 XX XX XX XX" class="w-full p-3" :class="{ 'p-invalid': !registerValidation.isValid && registerForm.phone }" />
+                        <InputText id="phone" v-model="registerForm.phone" placeholder="070 00 00 01" class="w-full p-3" :class="{ 'p-invalid': !registerValidation.isValid && registerForm.phone }" />
                     </div>
 
                     <div class="field">

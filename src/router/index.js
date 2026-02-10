@@ -6,13 +6,13 @@ const router = createRouter({
     routes: [
         {
             path: '/',
+            name: 'dashboard',
+            component: () => import('@/views/pages/Dashboard.vue')
+        },
+        {
+            path: '/admin',
             component: AppLayout,
             children: [
-                {
-                    path: '/',
-                    name: 'dashboard',
-                    component: () => import('@/App.vue')
-                },
                 {
                     path: '/mes-commandes',
                     name: 'OrdersHistory',
@@ -136,6 +136,21 @@ const router = createRouter({
             path: '/auth/error',
             name: 'error',
             component: () => import('@/views/pages/auth/Error.vue')
+        },
+        {
+            path: '/a-propos',
+            name: 'a-propos',
+            component: () => import('@/views/pages/APropos.vue')
+        },
+        {
+            path: '/support',
+            name: 'support',
+            component: () => import('@/views/pages/Support.vue')
+        },
+        {
+            path: '/centre-aide',
+            name: 'centre-aide',
+            component: () => import('@/views/pages/CentreAide.vue')
         },
         {
             path: '/:pathMatch(.*)*',

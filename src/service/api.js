@@ -106,11 +106,12 @@ class ApiService {
 
             if (!response.ok) {
                 // Gestion des erreurs HTTP
-                if (response.status === 401) {
-                    // Token expiré ou invalide
+                if (response.status === 401 && options.auth !== false) {
+                    // Token expiré ou invalide (seulement pour les requêtes authentifiées)
                     this.setToken(null);
                     this.setUser(null);
-                    window.location.href = '/';
+                    // Redirection automatique vers la page de login
+                    window.location.href = '/login';
                     throw new Error('Session expirée. Veuillez vous reconnecter.');
                 }
 
