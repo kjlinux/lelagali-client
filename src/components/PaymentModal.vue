@@ -5,6 +5,9 @@ import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import { useToast } from 'primevue/usetoast';
+import authService from '../service/AuthService';
+import commandeService from '../service/CommandeService';
+import referenceService from '../service/ReferenceService';
 
 const props = defineProps({
     visible: Boolean,
@@ -222,39 +225,91 @@ const processPayment = async () => {
     processing.value = true;
 
     try {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const user = authService.getCurrentUser();
+        if (!user) {
+            throw new Error('Utilisateur non authentifié');
+        }
 
+        // Créer une commande pour chaque restaurant
+        const commandesPromises = Object.entries(itemsByRestaurant.value).map(async ([restaurant, items]) => {
+            const paymentMethod = selectedPaymentMethods.value[restaurant];
+            const totals = totalsByRestaurant.value[restaurant];
+
+            // Récupérer l'ID du restaurateur depuis le premier item (tous les items d'un restaurant ont le même restaurateur_id)
+            const restaurateurId = items[0].restaurateur_id;
+
+            // Mapper le nom de la méthode de paiement vers l'ID
+            // Note: En production, vous devriez récupérer les moyens de paiement depuis l'API
+            const paymentMethodMap = {
+                mobile_money: 1,
+                orange_money: 2,
+                wave: 3,
+                cash_delivery: 4,
+                cash_pickup: 5
+            };
+
+            const commandeData = {
+                client_id: user.id,
+                restaurateur_id: restaurateurId,
+                type_service: selectedDeliveryMode.value === 'delivery' ? 'livraison' : 'retrait',
+                adresse_livraison: selectedDeliveryMode.value === 'delivery' ? deliveryAddress.value.street : null,
+                quartier_livraison: selectedDeliveryMode.value === 'delivery' ? deliveryAddress.value.quartier : null,
+                moyen_paiement_id: paymentMethodMap[paymentMethod] || 1,
+                notes_client: deliveryAddress.value.instructions || '',
+                reference_paiement: paymentReferences.value[restaurant] || null,
+                numero_paiement: paymentPhones.value[restaurant] || null,
+                items: items.map((item) => ({
+                    plat_id: item.id,
+                    quantite: item.quantity,
+                    prix_unitaire: item.price
+                }))
+            };
+
+            return await commandeService.createCommande(commandeData);
+        });
+
+        const commandes = await Promise.all(commandesPromises);
+
+        // Construire l'objet de réponse dans le format attendu par App.vue
         const orderDetails = {
-            orderId: 'CMD-' + Date.now(),
+            orderId: commandes[0].numero_commande || 'CMD-' + Date.now(),
             deliveryMode: selectedDeliveryMode.value,
             totalAmount: finalAmount.value,
             deliveryAddress: selectedDeliveryMode.value === 'delivery' ? deliveryAddress.value : null,
             restaurantOrders: {}
         };
 
-        // Créer les détails de commande pour chaque restaurant
-        Object.entries(itemsByRestaurant.value).forEach(([restaurant, items]) => {
-            const paymentMethod = selectedPaymentMethods.value[restaurant];
+        Object.entries(itemsByRestaurant.value).forEach(([restaurant, items], index) => {
+            const commande = commandes[index];
             const totals = totalsByRestaurant.value[restaurant];
 
             orderDetails.restaurantOrders[restaurant] = {
                 items,
-                paymentMethod,
+                paymentMethod: selectedPaymentMethods.value[restaurant],
                 amount: totals.total,
                 deliveryFee: totals.deliveryFee,
                 deliveredItems: totals.deliveredItems,
                 pickupItems: totals.pickupItems,
+                commandeId: commande.id,
                 reference: paymentReferences.value[restaurant] || null,
                 phone: paymentPhones.value[restaurant] || null
             };
         });
 
         emit('payment-success', orderDetails);
+
+        toast.add({
+            severity: 'success',
+            summary: 'Commande créée',
+            detail: 'Votre commande a été enregistrée avec succès !',
+            life: 5000
+        });
     } catch (error) {
+        console.error('Erreur création commande:', error);
         toast.add({
             severity: 'error',
             summary: 'Erreur de paiement',
-            detail: 'Impossible de traiter votre commande. Vérifiez vos informations.',
+            detail: error.message || 'Impossible de traiter votre commande. Veuillez réessayer.',
             life: 5000
         });
     } finally {

@@ -7,6 +7,7 @@ import Password from 'primevue/password';
 import Message from 'primevue/message';
 import Divider from 'primevue/divider';
 import { useToast } from 'primevue/usetoast';
+import authService from '@/service/AuthService';
 
 const props = defineProps({
     visible: {
@@ -138,25 +139,13 @@ const handleLogin = async () => {
     errorMessage.value = '';
 
     try {
-        // Simulation d'un appel API
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const { user } = await authService.login(loginForm.value.identifier, loginForm.value.password);
 
-        // Vérification simple (en production, ceci serait une vraie API)
-        if (loginForm.value.identifier === 'test@example.com' && loginForm.value.password === 'password') {
-            const userData = {
-                id: 1,
-                name: 'Jean Dupont',
-                email: 'test@example.com',
-                phone: '+225 07 08 09 10 11'
-            };
-
-            emit('auth-success', userData);
-            resetForms();
-        } else {
-            errorMessage.value = 'Identifiants incorrects';
-        }
+        emit('auth-success', user);
+        resetForms();
     } catch (error) {
-        errorMessage.value = 'Une erreur est survenue lors de la connexion';
+        console.error('Login error:', error);
+        errorMessage.value = error.message || 'Identifiants incorrects';
     } finally {
         isLoading.value = false;
     }
@@ -172,15 +161,7 @@ const handleRegister = async () => {
     errorMessage.value = '';
 
     try {
-        // Simulation d'un appel API
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-
-        const userData = {
-            id: Date.now(),
-            name: registerForm.value.name,
-            email: registerForm.value.email || null,
-            phone: registerForm.value.phone || null
-        };
+        const { user } = await authService.register(registerForm.value);
 
         toast.add({
             severity: 'success',
@@ -189,10 +170,11 @@ const handleRegister = async () => {
             life: 3000
         });
 
-        emit('auth-success', userData);
+        emit('auth-success', user);
         resetForms();
     } catch (error) {
-        errorMessage.value = 'Une erreur est survenue lors de la création du compte';
+        console.error('Register error:', error);
+        errorMessage.value = error.message || 'Une erreur est survenue lors de la création du compte';
     } finally {
         isLoading.value = false;
     }

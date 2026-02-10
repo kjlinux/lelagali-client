@@ -1,5 +1,6 @@
 <script setup>
 import Button from 'primevue/button';
+import Drawer from 'primevue/drawer';
 import InputText from 'primevue/inputtext';
 import Menu from 'primevue/menu';
 import Badge from 'primevue/badge';
@@ -19,6 +20,7 @@ const props = defineProps({
 const mobileSearch = ref('');
 const desktopSearch = ref('');
 const userMenu = ref();
+const mobileMenuVisible = ref(false);
 
 const userMenuItems = ref([
     {
@@ -58,6 +60,9 @@ const toggleUserMenu = (event) => {
     <header class="bg-white shadow-sm border-b border-gray-100">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-20">
+                <!-- Bouton hamburger mobile -->
+                <Button icon="pi pi-bars" text class="md:hidden text-[#4B2E1E]" @click="mobileMenuVisible = true" aria-label="Menu" />
+
                 <!-- Logo -->
                 <div class="flex items-center space-x-3">
                     <img src="/pic.jpg" alt="Logo LeLagaLi" class="w-16 h-16 object-cover" />
@@ -106,6 +111,35 @@ const toggleUserMenu = (event) => {
                 </div>
             </div>
         </section>
+
+        <!-- Menu mobile Drawer -->
+        <Drawer v-model:visible="mobileMenuVisible" position="left" class="w-72">
+            <template #header>
+                <div class="flex items-center space-x-3">
+                    <img src="/pic.jpg" alt="Logo LeLagaLi" class="w-10 h-10 object-cover" />
+                    <span class="font-bold text-[#4B2E1E] text-lg">LeLagaLi</span>
+                </div>
+            </template>
+
+            <nav class="flex flex-col space-y-2">
+                <Button label="Accueil" icon="pi pi-home" text class="w-full justify-start text-[#4B2E1E] hover:text-[#47A547] font-medium" @click="mobileMenuVisible = false" />
+                <div class="relative">
+                    <Button label="Mes commandes" icon="pi pi-shopping-bag" text class="w-full justify-start text-[#4B2E1E] hover:text-[#47A547] font-medium" @click="mobileMenuVisible = false; $emit('show-orders')" />
+                    <Badge v-if="pendingOrdersCount > 0" :value="pendingOrdersCount" class="absolute top-2 right-2 bg-[#E6782C]" />
+                </div>
+
+                <hr class="my-2 border-gray-200" />
+
+                <template v-if="user">
+                    <div class="px-4 py-2 text-sm text-gray-600">
+                        Connecte en tant que <strong class="text-[#4B2E1E]">{{ user.name }}</strong>
+                    </div>
+                    <Button label="Se deconnecter" icon="pi pi-sign-out" text class="w-full justify-start text-red-600 hover:text-red-700 font-medium" @click="mobileMenuVisible = false; $emit('logout')" />
+                </template>
+
+                <Button v-else label="Se connecter" icon="pi pi-sign-in" class="w-full bg-[#E6782C] hover:bg-[#d66a25] text-white font-medium" @click="mobileMenuVisible = false; $emit('login')" />
+            </nav>
+        </Drawer>
     </header>
 </template>
 

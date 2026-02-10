@@ -4,123 +4,18 @@ import Button from 'primevue/button';
 import Card from 'primevue/card';
 import TabPanel from 'primevue/tabpanel';
 import TabView from 'primevue/tabview';
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 
 const props = defineProps({
     user: {
         type: Object,
         default: null
+    },
+    orders: {
+        type: Array,
+        default: () => []
     }
 });
-
-// Données d'exemple des commandes
-const orders = ref([
-    {
-        id: 'CMD-1704878400000',
-        date: new Date('2025-01-10T14:30:00'),
-        totalAmount: 3500,
-        deliveryMode: 'delivery',
-        status: 'delivered',
-        deliveryAddress: {
-            street: 'Rue des Palmiers, Villa 23',
-            quartier: 'Cocody',
-            commune: 'Cocody',
-            phone: '+225 07 12 34 56 78'
-        },
-        restaurantOrders: {
-            'Maman Adjoua': {
-                items: [{ id: 1, title: 'Attiéké Poisson', quantity: 2, price: 1500 }],
-                paymentMethod: 'mobile_money',
-                amount: 3500,
-                deliveryFee: 500,
-                status: 'delivered',
-                deliveredItems: [{ id: 1, title: 'Attiéké Poisson', quantity: 2, price: 1500 }],
-                pickupItems: []
-            }
-        }
-    },
-    {
-        id: 'CMD-1704964800000',
-        date: new Date('2025-01-11T12:15:00'),
-        totalAmount: 2000,
-        deliveryMode: 'pickup',
-        status: 'ready_for_pickup',
-        restaurantOrders: {
-            'Tante Fatou': {
-                items: [{ id: 2, title: 'Riz Gras au Poulet', quantity: 1, price: 2000 }],
-                paymentMethod: 'cash_pickup',
-                amount: 2000,
-                deliveryFee: 0,
-                status: 'ready_for_pickup',
-                deliveredItems: [],
-                pickupItems: [{ id: 2, title: 'Riz Gras au Poulet', quantity: 1, price: 2000 }]
-            }
-        }
-    },
-    {
-        id: 'CMD-1705051200000',
-        date: new Date('2025-01-12T18:45:00'),
-        totalAmount: 4500,
-        deliveryMode: 'delivery',
-        status: 'in_delivery',
-        deliveryAddress: {
-            street: 'Boulevard Lagunaire, Résidence Palmier',
-            quartier: 'Angré',
-            commune: 'Cocody',
-            phone: '+225 07 87 65 43 21'
-        },
-        restaurantOrders: {
-            'Maman Koffi': {
-                items: [
-                    { id: 3, title: 'Foutou Igname Sauce Graine', quantity: 1, price: 2000 },
-                    { id: 4, title: 'Alloco Poisson', quantity: 1, price: 2000 }
-                ],
-                paymentMethod: 'wave',
-                amount: 4500,
-                deliveryFee: 500,
-                status: 'in_delivery',
-                deliveredItems: [
-                    { id: 3, title: 'Foutou Igname Sauce Graine', quantity: 1, price: 2000 },
-                    { id: 4, title: 'Alloco Poisson', quantity: 1, price: 2000 }
-                ],
-                pickupItems: []
-            }
-        }
-    },
-    {
-        id: 'CMD-1705137600000',
-        date: new Date('2025-01-13T16:20:00'),
-        totalAmount: 5000,
-        deliveryMode: 'delivery',
-        status: 'mixed_status',
-        deliveryAddress: {
-            street: 'Carrefour Soleil, Immeuble ABC',
-            quartier: 'Treichville',
-            commune: 'Treichville',
-            phone: '+225 05 44 33 22 11'
-        },
-        restaurantOrders: {
-            'Tantie Aya': {
-                items: [{ id: 5, title: 'Kedjenou de Poulet', quantity: 1, price: 2500 }],
-                paymentMethod: 'orange_money',
-                amount: 3000,
-                deliveryFee: 500,
-                status: 'ready_for_delivery',
-                deliveredItems: [{ id: 5, title: 'Kedjenou de Poulet', quantity: 1, price: 2500 }],
-                pickupItems: []
-            },
-            'Maman Ama': {
-                items: [{ id: 6, title: 'Bangui aux Crevettes', quantity: 1, price: 2000 }],
-                paymentMethod: 'cash_pickup',
-                amount: 2000,
-                deliveryFee: 0,
-                status: 'ready_for_pickup',
-                deliveredItems: [],
-                pickupItems: [{ id: 6, title: 'Bangui aux Crevettes', quantity: 1, price: 2000 }]
-            }
-        }
-    }
-]);
 
 // Adresses des restaurants
 const restaurantAddresses = {
@@ -138,9 +33,9 @@ const restaurantAddresses = {
 };
 
 // Filtrer les commandes
-const currentOrders = computed(() => orders.value.filter((order) => ['preparing', 'ready_for_pickup', 'ready_for_delivery', 'in_delivery', 'mixed_status'].includes(order.status)));
+const currentOrders = computed(() => props.orders.filter((order) => ['preparing', 'ready_for_pickup', 'ready_for_delivery', 'in_delivery', 'mixed_status'].includes(order.status)));
 
-const completedOrders = computed(() => orders.value.filter((order) => ['delivered', 'picked_up', 'completed'].includes(order.status)));
+const completedOrders = computed(() => props.orders.filter((order) => ['delivered', 'picked_up', 'completed'].includes(order.status)));
 
 // Fonction pour obtenir le statut global de la commande
 const getOrderGlobalStatus = (order) => {

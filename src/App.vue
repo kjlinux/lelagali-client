@@ -3,7 +3,7 @@ import Dialog from 'primevue/dialog';
 import Paginator from 'primevue/paginator';
 import Toast from 'primevue/toast';
 import { useToast } from 'primevue/usetoast';
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import AppFooter from './components/AppFooter.vue';
 import AppHeader from './components/AppHeader.vue';
 import AuthModal from './components/AuthModal.vue';
@@ -12,7 +12,12 @@ import CartSummary from './components/CartSummary.vue';
 import MenuDetails from './components/MenuDetails.vue';
 import MenuFilters from './components/MenuFilters.vue';
 import MenuGrid from './components/MenuGrid.vue';
+import OrdersHistory from './components/OrdersHistory.vue';
 import PaymentModal from './components/PaymentModal.vue';
+import authService from './service/AuthService';
+import commandeService from './service/CommandeService';
+import platService from './service/PlatService';
+import referenceService from './service/ReferenceService';
 
 const toast = useToast();
 
@@ -31,121 +36,17 @@ const showAuthModal = ref(false);
 const showPaymentModal = ref(false);
 const showOrdersModal = ref(false);
 const selectedMenu = ref(null);
-const user = ref({ name: 'Jean Dupont' });
+const user = ref(null);
 const orderData = ref(null);
+const showOrderConfirmation = ref(false);
+const lastCompletedOrder = ref(null);
 
 // Pagination state
 const currentPage = ref(0);
 const itemsPerPage = ref(9);
 
-// Données d'exemple des commandes (même que dans OrdersHistory)
-const orders = ref([
-    {
-        id: 'CMD-1704878400000',
-        date: new Date('2025-01-10T14:30:00'),
-        totalAmount: 3500,
-        deliveryMode: 'delivery',
-        status: 'delivered',
-        deliveryAddress: {
-            street: 'Rue des Palmiers, Villa 23',
-            quartier: 'Cocody',
-            commune: 'Cocody',
-            phone: '+225 07 12 34 56 78'
-        },
-        restaurantOrders: {
-            'Maman Adjoua': {
-                items: [{ id: 1, title: 'Attiéké Poisson', quantity: 2, price: 1500 }],
-                paymentMethod: 'mobile_money',
-                amount: 3500,
-                deliveryFee: 500,
-                status: 'delivered',
-                deliveredItems: [{ id: 1, title: 'Attiéké Poisson', quantity: 2, price: 1500 }],
-                pickupItems: []
-            }
-        }
-    },
-    {
-        id: 'CMD-1704964800000',
-        date: new Date('2025-01-11T12:15:00'),
-        totalAmount: 2000,
-        deliveryMode: 'pickup',
-        status: 'ready_for_pickup',
-        restaurantOrders: {
-            'Tante Fatou': {
-                items: [{ id: 2, title: 'Riz Gras au Poulet', quantity: 1, price: 2000 }],
-                paymentMethod: 'cash_pickup',
-                amount: 2000,
-                deliveryFee: 0,
-                status: 'ready_for_pickup',
-                deliveredItems: [],
-                pickupItems: [{ id: 2, title: 'Riz Gras au Poulet', quantity: 1, price: 2000 }]
-            }
-        }
-    },
-    {
-        id: 'CMD-1705051200000',
-        date: new Date('2025-01-12T18:45:00'),
-        totalAmount: 4500,
-        deliveryMode: 'delivery',
-        status: 'in_delivery',
-        deliveryAddress: {
-            street: 'Boulevard Lagunaire, Résidence Palmier',
-            quartier: 'Angré',
-            commune: 'Cocody',
-            phone: '+225 07 87 65 43 21'
-        },
-        restaurantOrders: {
-            'Maman Koffi': {
-                items: [
-                    { id: 3, title: 'Foutou Igname Sauce Graine', quantity: 1, price: 2000 },
-                    { id: 4, title: 'Alloco Poisson', quantity: 1, price: 2000 }
-                ],
-                paymentMethod: 'wave',
-                amount: 4500,
-                deliveryFee: 500,
-                status: 'in_delivery',
-                deliveredItems: [
-                    { id: 3, title: 'Foutou Igname Sauce Graine', quantity: 1, price: 2000 },
-                    { id: 4, title: 'Alloco Poisson', quantity: 1, price: 2000 }
-                ],
-                pickupItems: []
-            }
-        }
-    },
-    {
-        id: 'CMD-1705137600000',
-        date: new Date('2025-01-13T16:20:00'),
-        totalAmount: 5000,
-        deliveryMode: 'delivery',
-        status: 'mixed_status',
-        deliveryAddress: {
-            street: 'Carrefour Soleil, Immeuble ABC',
-            quartier: 'Treichville',
-            commune: 'Treichville',
-            phone: '+225 05 44 33 22 11'
-        },
-        restaurantOrders: {
-            'Tantie Aya': {
-                items: [{ id: 5, title: 'Kedjenou de Poulet', quantity: 1, price: 2500 }],
-                paymentMethod: 'orange_money',
-                amount: 3000,
-                deliveryFee: 500,
-                status: 'ready_for_delivery',
-                deliveredItems: [{ id: 5, title: 'Kedjenou de Poulet', quantity: 1, price: 2500 }],
-                pickupItems: []
-            },
-            'Maman Ama': {
-                items: [{ id: 6, title: 'Bangui aux Crevettes', quantity: 1, price: 2000 }],
-                paymentMethod: 'cash_pickup',
-                amount: 2000,
-                deliveryFee: 0,
-                status: 'ready_for_pickup',
-                deliveredItems: [],
-                pickupItems: [{ id: 6, title: 'Bangui aux Crevettes', quantity: 1, price: 2000 }]
-            }
-        }
-    }
-]);
+// Commandes - chargées depuis l'API
+const orders = ref([]);
 
 // Calculer les commandes en cours
 const currentOrders = computed(() => orders.value.filter((order) => ['preparing', 'ready_for_pickup', 'ready_for_delivery', 'in_delivery', 'mixed_status'].includes(order.status)));
@@ -155,197 +56,11 @@ const pendingOrdersCount = computed(() => {
     return currentOrders.value.length;
 });
 
-// Sample data - En production, ceci viendrait d'une API
-const menus = ref([
-    {
-        id: 1,
-        title: 'Attiéké Poisson Braisé',
-        description: 'Attiéké frais accompagné de poisson braisé et sa sauce tomate épicée aux légumes locaux',
-        price: 2500,
-        image: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400&h=300&fit=crop',
-        restauratrice: 'Maman Adjoua',
-        quartier: 'Plateau',
-        type: 'attiéké',
-        quantity: 15,
-        livraison: true,
-        tempsPreparation: '30 min',
-        ingredients: ['Attiéké', 'Poisson frais', 'Tomates', 'Oignons', 'Piment'],
-        rating: 4.5,
-        reviews: 23,
-        paymentMethods: ['mobile_money', 'wave', 'orange_money', 'cash_delivery', 'cash_pickup']
-    },
-    {
-        id: 2,
-        title: 'Riz au Gras Traditionnel',
-        description: "Riz parfumé cuit dans l'huile de palme rouge avec légumes et viande de choix",
-        price: 3000,
-        image: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400&h=300&fit=crop',
-        restauratrice: 'Tante Fatou',
-        quartier: 'Cocody',
-        type: 'riz',
-        quantity: 20,
-        livraison: true,
-        tempsPreparation: '45 min',
-        ingredients: ['Riz jasmin', 'Huile de palme', 'Viande de bœuf', 'Légumes variés'],
-        rating: 4.8,
-        reviews: 45,
-        paymentMethods: ['mobile_money', 'orange_money', 'cash_delivery']
-    },
-    {
-        id: 3,
-        title: 'Foutou Sauce Arachide',
-        description: "Foutou d'igname pilé servi avec sauce arachide crémeuse et viande de bœuf tendre",
-        price: 2800,
-        image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=300&fit=crop',
-        restauratrice: 'Maman Koffi',
-        quartier: 'Yopougon',
-        type: 'foutou',
-        quantity: 12,
-        livraison: false,
-        tempsPreparation: '50 min',
-        ingredients: ['Igname', 'Arachides', 'Viande de bœuf', 'Épices locales'],
-        rating: 4.3,
-        reviews: 18,
-        paymentMethods: ['cash_pickup', 'mobile_money']
-    },
-    {
-        id: 4,
-        title: 'Attieké Poulet Kedjenou',
-        description: 'Attieké servi avec poulet kedjenou mijoté aux légumes et épices traditionnelles',
-        price: 3200,
-        image: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=400&h=300&fit=crop',
-        restauratrice: 'Tantie Aya',
-        quartier: 'Plateau',
-        type: 'attiéké',
-        quantity: 18,
-        livraison: true,
-        tempsPreparation: '40 min',
-        ingredients: ['Attiéké', 'Poulet fermier', 'Légumes du jardin', 'Épices kedjenou'],
-        rating: 4.7,
-        reviews: 32,
-        paymentMethods: ['wave', 'orange_money', 'cash_delivery', 'cash_pickup']
-    },
-    {
-        id: 5,
-        title: 'Riz Sauce Gombo',
-        description: 'Riz blanc accompagné de sauce gombo avec poisson fumé et crevettes',
-        price: 2700,
-        image: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=400&h=300&fit=crop',
-        restauratrice: 'Maman Ama',
-        quartier: 'Cocody',
-        type: 'riz',
-        quantity: 25,
-        livraison: true,
-        tempsPreparation: '35 min',
-        ingredients: ['Riz', 'Gombo frais', 'Poisson fumé', 'Crevettes', 'Épices'],
-        rating: 4.4,
-        reviews: 28,
-        paymentMethods: ['mobile_money', 'wave', 'cash_delivery']
-    },
-    // 👇 6 nouveaux plats
-    {
-        id: 6,
-        title: 'Placali Sauce Graine',
-        description: 'Placali à base de farine de manioc accompagné de sauce graine aux poissons fumés',
-        price: 2600,
-        image: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=400&h=300&fit=crop',
-        restauratrice: 'Maman Akissi',
-        quartier: 'Treichville',
-        type: 'placali',
-        quantity: 10,
-        livraison: true,
-        tempsPreparation: '55 min',
-        ingredients: ['Placali', 'Sauce graine', 'Poisson fumé', 'Crabe', 'Épices'],
-        rating: 4.6,
-        reviews: 20,
-        paymentMethods: ['mobile_money', 'cash_delivery', 'cash_pickup']
-    },
-    {
-        id: 7,
-        title: 'Garba Spécial',
-        description: 'Attiéké garba avec thon frit, piment frais et tomate oignon',
-        price: 1500,
-        image: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=400&h=300&fit=crop',
-        restauratrice: 'Moussa Garba',
-        quartier: 'Adjamé',
-        type: 'attiéké',
-        quantity: 50,
-        livraison: false,
-        tempsPreparation: '15 min',
-        ingredients: ['Attiéké', 'Thon frit', 'Piment', 'Tomates', 'Oignons'],
-        rating: 4.2,
-        reviews: 70,
-        paymentMethods: ['cash_pickup']
-    },
-    {
-        id: 8,
-        title: 'Sauce Claire aux Escargots',
-        description: 'Sauce claire traditionnelle servie avec escargots et riz blanc',
-        price: 3500,
-        image: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=400&h=300&fit=crop',
-        restauratrice: 'Tantie Awa',
-        quartier: 'Cocody',
-        type: 'riz',
-        quantity: 8,
-        livraison: true,
-        tempsPreparation: '60 min',
-        ingredients: ['Riz blanc', 'Escargots', 'Aubergines', 'Épices locales'],
-        rating: 4.9,
-        reviews: 15,
-        paymentMethods: ['mobile_money', 'wave', 'cash_delivery']
-    },
-    {
-        id: 9,
-        title: 'Kedjenou de Poisson',
-        description: 'Poisson braisé en kedjenou avec légumes frais, servi avec attiéké',
-        price: 3000,
-        image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop',
-        restauratrice: 'Papa Kader',
-        quartier: 'Marcory',
-        type: 'attiéké',
-        quantity: 14,
-        livraison: true,
-        tempsPreparation: '40 min',
-        ingredients: ['Poisson frais', 'Attiéké', 'Tomates', 'Oignons', 'Piments'],
-        rating: 4.5,
-        reviews: 24,
-        paymentMethods: ['mobile_money', 'orange_money', 'cash_delivery']
-    },
-    {
-        id: 10,
-        title: 'Foutou Banane Sauce Graine',
-        description: 'Foutou banane servi avec une sauce graine onctueuse au poulet fumé',
-        price: 2800,
-        image: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=400&h=300&fit=crop',
-        restauratrice: 'Maman Clémentine',
-        quartier: 'Koumassi',
-        type: 'foutou',
-        quantity: 11,
-        livraison: true,
-        tempsPreparation: '50 min',
-        ingredients: ['Banane plantain', 'Sauce graine', 'Poulet fumé', 'Épices'],
-        rating: 4.7,
-        reviews: 19,
-        paymentMethods: ['wave', 'cash_delivery', 'cash_pickup']
-    },
-    {
-        id: 11,
-        title: 'Riz Sauce Aubergine',
-        description: 'Riz blanc accompagné de sauce aubergine avec poisson fumé et viande',
-        price: 2700,
-        image: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?w=400&h=300&fit=crop',
-        restauratrice: 'Maman Fanta',
-        quartier: 'Abobo',
-        type: 'riz',
-        quantity: 22,
-        livraison: true,
-        tempsPreparation: '45 min',
-        ingredients: ['Riz blanc', 'Aubergine', 'Poisson fumé', 'Viande', 'Épices locales'],
-        rating: 4.4,
-        reviews: 25,
-        paymentMethods: ['mobile_money', 'cash_delivery']
-    }
-]);
+// État de chargement
+const loading = ref(true);
+
+// Menus - chargés depuis l'API
+const menus = ref([]);
 
 // Computed properties
 const availableQuartiers = computed(() => {
@@ -386,6 +101,14 @@ const totalCartPrice = computed(() => {
     return cartItems.value.reduce((total, item) => total + item.price * item.quantity, 0);
 });
 
+const menuMaxQuantities = computed(() => {
+    const map = {};
+    menus.value.forEach((menu) => {
+        map[menu.id] = menu.quantity;
+    });
+    return map;
+});
+
 // Methods
 const handleSearch = (query) => {
     searchQuery.value = query;
@@ -406,7 +129,21 @@ const onPageChange = (event) => {
 };
 
 const addToCart = (menu) => {
+    const originalMenu = menus.value.find((m) => m.id === menu.id);
+    if (!originalMenu) return;
+
     const existingItem = cartItems.value.find((item) => item.id === menu.id);
+    const currentCartQuantity = existingItem ? existingItem.quantity : 0;
+
+    if (currentCartQuantity >= originalMenu.quantity) {
+        toast.add({
+            severity: 'warn',
+            summary: 'Stock insuffisant',
+            detail: `Il ne reste que ${originalMenu.quantity} portion(s) de ${menu.title}`,
+            life: 3000
+        });
+        return;
+    }
 
     if (existingItem) {
         existingItem.quantity += 1;
@@ -433,6 +170,17 @@ const addToCart = (menu) => {
 const updateCartItemQuantity = (itemId, newQuantity) => {
     if (newQuantity <= 0) {
         removeFromCart(itemId);
+        return;
+    }
+
+    const originalMenu = menus.value.find((m) => m.id === itemId);
+    if (originalMenu && newQuantity > originalMenu.quantity) {
+        toast.add({
+            severity: 'warn',
+            summary: 'Stock insuffisant',
+            detail: `Il ne reste que ${originalMenu.quantity} portion(s) de ${originalMenu.title}`,
+            life: 3000
+        });
         return;
     }
 
@@ -480,7 +228,7 @@ const handleCheckout = (data) => {
     showCartDialog.value = false;
 };
 
-const handleAuthSuccess = (userData) => {
+const handleAuthSuccess = async (userData) => {
     user.value = userData;
     showAuthModal.value = false;
 
@@ -490,6 +238,9 @@ const handleAuthSuccess = (userData) => {
         detail: `Bienvenue ${userData.name} !`,
         life: 3000
     });
+
+    // Charger les commandes de l'utilisateur
+    await loadOrders();
 
     // Si il y avait une commande en attente, procéder au paiement
     if (orderData.value) {
@@ -504,7 +255,17 @@ const handleShowOrders = () => {
     showOrdersModal.value = true;
 };
 
-const handlePaymentSuccess = () => {
+const handlePaymentSuccess = async (orderDetails) => {
+    // Recharger les commandes depuis l'API
+    await loadOrders();
+
+    // Trouver la dernière commande ajoutée (devrait être la première dans la liste)
+    const newOrder = orders.value[0];
+    if (newOrder) {
+        lastCompletedOrder.value = newOrder;
+        showOrderConfirmation.value = true;
+    }
+
     toast.add({
         severity: 'success',
         summary: 'Commande validée',
@@ -522,8 +283,10 @@ const handleLogin = () => {
     showAuthModal.value = true;
 };
 
-const handleLogout = () => {
+const handleLogout = async () => {
+    await authService.logout();
     user.value = null;
+    orders.value = []; // Réinitialiser les commandes
     toast.add({
         severity: 'info',
         summary: 'Déconnexion',
@@ -531,6 +294,135 @@ const handleLogout = () => {
         life: 3000
     });
 };
+
+// Fonction pour charger les commandes de l'utilisateur
+const loadOrders = async () => {
+    if (!user.value) {
+        orders.value = [];
+        return;
+    }
+
+    try {
+        const { data } = await commandeService.getCommandes({
+            client_id: user.value.id,
+            per_page: 100
+        });
+
+        // Mapper le statut backend vers le statut frontend
+        const mapStatus = (backendStatus) => {
+            const statusMap = {
+                en_attente: 'preparing',
+                confirmee: 'preparing',
+                prete: 'ready_for_pickup',
+                en_livraison: 'in_delivery',
+                recuperee: 'picked_up',
+                livree: 'delivered',
+                terminee: 'completed',
+                annulee: 'cancelled'
+            };
+            return statusMap[backendStatus] || 'preparing';
+        };
+
+        // Transformer les données backend pour correspondre au format frontend
+        orders.value = data.map((commande) => ({
+            id: commande.numero_commande,
+            date: new Date(commande.created_at),
+            totalAmount: parseFloat(commande.montant_total),
+            deliveryMode: commande.type_service === 'livraison' ? 'delivery' : 'pickup',
+            status: mapStatus(commande.statut),
+            deliveryAddress: commande.type_service === 'livraison'
+                ? {
+                      street: commande.adresse_livraison,
+                      quartier: commande.quartier_livraison,
+                      commune: commande.quartier_livraison,
+                      phone: user.value.phone || ''
+                  }
+                : null,
+            restaurantOrders: {
+                [commande.restaurateur?.nom || 'Restaurant']: {
+                    items: (commande.items || []).map((item) => ({
+                        id: item.plat_id,
+                        title: item.plat?.nom || 'Plat',
+                        quantity: item.quantite,
+                        price: parseFloat(item.prix_unitaire)
+                    })),
+                    paymentMethod: commande.moyen_paiement?.code || 'cash',
+                    amount: parseFloat(commande.montant_total),
+                    deliveryFee: parseFloat(commande.frais_livraison || 0),
+                    status: mapStatus(commande.statut),
+                    deliveredItems: commande.type_service === 'livraison' ? (commande.items || []).map((item) => ({
+                        id: item.plat_id,
+                        title: item.plat?.nom || 'Plat',
+                        quantity: item.quantite,
+                        price: parseFloat(item.prix_unitaire)
+                    })) : [],
+                    pickupItems: commande.type_service === 'retrait' ? (commande.items || []).map((item) => ({
+                        id: item.plat_id,
+                        title: item.plat?.nom || 'Plat',
+                        quantity: item.quantite,
+                        price: parseFloat(item.prix_unitaire)
+                    })) : []
+                }
+            }
+        }));
+
+        console.log('Commandes chargées:', orders.value.length);
+    } catch (error) {
+        console.error('Erreur chargement commandes:', error);
+        // Ne pas afficher de toast d'erreur ici car l'utilisateur n'a peut-être jamais passé de commande
+    }
+};
+
+// Charger les données au montage du composant
+onMounted(async () => {
+    // 1. Restaurer l'utilisateur si déjà connecté
+    if (authService.isAuthenticated()) {
+        user.value = authService.getCurrentUser();
+    }
+
+    // 2. Charger les menus du jour depuis l'API
+    loading.value = true;
+    try {
+        const menusData = await platService.getTodayMenus();
+
+        // Transformer les données backend pour correspondre au format frontend
+        menus.value = menusData.map((plat) => ({
+            id: plat.id,
+            title: plat.nom,
+            description: plat.description,
+            price: parseInt(plat.prix),
+            image: plat.image_url || 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400&h=300&fit=crop',
+            restauratrice: plat.restaurateur?.nom || 'Restaurant',
+            quartier: plat.restaurateur?.quartier?.nom || 'Abidjan',
+            type: plat.type_plat || 'plat',
+            quantity: plat.quantite_disponible || 0,
+            livraison: plat.livraison_disponible || false,
+            tempsPreparation: plat.temps_preparation || '30 min',
+            ingredients: plat.ingredients ? plat.ingredients.split(',').map((i) => i.trim()) : [],
+            rating: plat.note_moyenne || 4.5,
+            reviews: plat.nombre_avis || 0,
+            paymentMethods: ['mobile_money', 'wave', 'orange_money', 'cash_delivery', 'cash_pickup'],
+            restaurateur_id: plat.restaurateur_id
+        }));
+
+        console.log('Menus chargés:', menus.value.length);
+    } catch (error) {
+        console.error('Erreur chargement menus:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Erreur',
+            detail: 'Impossible de charger les menus. Veuillez réessayer.',
+            life: 5000
+        });
+    } finally {
+        loading.value = false;
+    }
+
+    // 3. Charger les commandes si l'utilisateur est connecté
+    if (user.value) {
+        await loadOrders();
+    }
+});
 </script>
 
 <template>
@@ -542,47 +434,56 @@ const handleLogout = () => {
             <div class="container mx-auto px-4 py-6">
                 <MenuFilters @filter-change="handleFilterChange" :quartiers="availableQuartiers" :types="availableTypes" />
 
-                <!-- Results info -->
-                <div class="mb-6" id="menu-section">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-semibold text-[#4B2E1E]">
-                            Menus disponibles
-                            <span class="text-base font-normal text-gray-600"> ({{ totalFilteredMenus }} résultat{{ totalFilteredMenus > 1 ? 's' : '' }}) </span>
-                        </h2>
-                        <div class="text-sm text-gray-600" v-if="totalFilteredMenus > itemsPerPage">Page {{ currentPage + 1 }} sur {{ Math.ceil(totalFilteredMenus / itemsPerPage) }}</div>
+                <!-- Indicateur de chargement -->
+                <div v-if="loading" class="text-center py-12">
+                    <i class="pi pi-spin pi-spinner text-4xl text-[#47A547]"></i>
+                    <p class="text-gray-600 mt-4">Chargement des menus...</p>
+                </div>
+
+                <!-- Contenu principal -->
+                <div v-else>
+                    <!-- Results info -->
+                    <div class="mb-6" id="menu-section">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-semibold text-[#4B2E1E]">
+                                Menus disponibles
+                                <span class="text-base font-normal text-gray-600"> ({{ totalFilteredMenus }} résultat{{ totalFilteredMenus > 1 ? 's' : '' }}) </span>
+                            </h2>
+                            <div class="text-sm text-gray-600" v-if="totalFilteredMenus > itemsPerPage">Page {{ currentPage + 1 }} sur {{ Math.ceil(totalFilteredMenus / itemsPerPage) }}</div>
+                        </div>
                     </div>
-                </div>
 
-                <MenuGrid :menus="paginatedMenus" @add-to-cart="addToCart" @view-details="viewMenuDetails" />
+                        <MenuGrid :menus="paginatedMenus" @add-to-cart="addToCart" @view-details="viewMenuDetails" />
 
-                <!-- Pagination -->
-                <div class="mt-8" v-if="totalFilteredMenus > itemsPerPage">
-                    <Paginator
-                        :first="currentPage * itemsPerPage"
-                        :rows="itemsPerPage"
-                        :totalRecords="totalFilteredMenus"
-                        @page="onPageChange"
-                        template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink"
-                        currentPageReportTemplate="Page {currentPage} sur {totalPages}"
-                        class="bg-white rounded-lg shadow-sm border"
-                    />
-                </div>
+                    <!-- Pagination -->
+                    <div class="mt-8" v-if="totalFilteredMenus > itemsPerPage">
+                        <Paginator
+                            :first="currentPage * itemsPerPage"
+                            :rows="itemsPerPage"
+                            :totalRecords="totalFilteredMenus"
+                            @page="onPageChange"
+                            template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink"
+                            currentPageReportTemplate="Page {currentPage} sur {totalPages}"
+                            class="bg-white rounded-lg shadow-sm border"
+                        />
+                    </div>
 
-                <!-- Message si aucun résultat -->
-                <div v-if="totalFilteredMenus === 0" class="text-center py-12">
-                    <div class="bg-white rounded-lg shadow-sm p-8 max-w-md mx-auto">
-                        <i class="pi pi-search text-4xl text-gray-400 mb-4"></i>
-                        <h3 class="text-lg font-semibold text-[#4B2E1E] mb-2">Aucun menu trouvé</h3>
-                        <p class="text-gray-600 mb-4">Essayez de modifier vos critères de recherche ou vos filtres.</p>
-                        <button
-                            @click="
-                                searchQuery = '';
-                                filters = { quartier: '', type: '', livraisonOnly: false, priceRange: [0, 10000] };
-                            "
-                            class="text-[#47A547] hover:text-[#3d8b3d] font-medium"
-                        >
-                            Réinitialiser les filtres
-                        </button>
+                    <!-- Message si aucun résultat -->
+                    <div v-if="totalFilteredMenus === 0" class="text-center py-12">
+                        <div class="bg-white rounded-lg shadow-sm p-8 max-w-md mx-auto">
+                            <i class="pi pi-search text-4xl text-gray-400 mb-4"></i>
+                            <h3 class="text-lg font-semibold text-[#4B2E1E] mb-2">Aucun menu trouvé</h3>
+                            <p class="text-gray-600 mb-4">Essayez de modifier vos critères de recherche ou vos filtres.</p>
+                            <button
+                                @click="
+                                    searchQuery = '';
+                                    filters = { quartier: '', type: '', livraisonOnly: false, priceRange: [0, 10000] };
+                                "
+                                class="text-[#47A547] hover:text-[#3d8b3d] font-medium"
+                            >
+                                Réinitialiser les filtres
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -594,7 +495,7 @@ const handleLogout = () => {
 
         <!-- Cart Dialog -->
         <Dialog v-model:visible="showCartDialog" header="Mon Panier" :modal="true" :style="{ width: '450px' }" :closable="true">
-            <CartDetails :items="cartItems" @update-quantity="updateCartItemQuantity" @remove-item="removeFromCart" @checkout="handleCheckout" />
+            <CartDetails :items="cartItems" :max-quantities="menuMaxQuantities" @update-quantity="updateCartItemQuantity" @remove-item="removeFromCart" @checkout="handleCheckout" />
         </Dialog>
 
         <!-- Menu Details Dialog -->
@@ -604,7 +505,7 @@ const handleLogout = () => {
 
         <!-- Orders Modal -->
         <Dialog v-model:visible="showOrdersModal" modal header="Mes commandes" :style="{ width: '90vw', maxWidth: '1200px', height: '90vh' }" :closable="true">
-            <OrdersHistory :user="user" />
+            <OrdersHistory :user="user" :orders="orders" />
         </Dialog>
 
         <!-- Auth Modal -->
@@ -612,6 +513,68 @@ const handleLogout = () => {
 
         <!-- Payment Modal -->
         <PaymentModal v-model:visible="showPaymentModal" :orderData="orderData" @payment-success="handlePaymentSuccess" @payment-cancel="showPaymentModal = false" />
+
+        <!-- Order Confirmation Dialog -->
+        <Dialog v-model:visible="showOrderConfirmation" modal header="Commande confirmée !" :style="{ width: '600px', maxWidth: '95vw' }" :closable="true">
+            <div v-if="lastCompletedOrder" class="space-y-6">
+                <!-- En-tête avec icône de succès -->
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-[#47A547] rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="pi pi-check text-white text-3xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-[#4B2E1E]">Merci pour votre commande !</h3>
+                    <p class="text-gray-600 mt-1">Commande #{{ lastCompletedOrder.id.split('-')[1] }}</p>
+                </div>
+
+                <!-- Détails par restaurant -->
+                <div class="space-y-3">
+                    <h4 class="font-semibold text-[#4B2E1E]">Détail de votre commande</h4>
+                    <div v-for="(restaurant, restaurantName) in lastCompletedOrder.restaurantOrders" :key="restaurantName" class="bg-[#FDF6EC] p-4 rounded-lg border">
+                        <h5 class="font-semibold text-[#4B2E1E] mb-2">{{ restaurantName }}</h5>
+                        <div class="space-y-1">
+                            <div v-for="item in restaurant.items" :key="item.id" class="flex justify-between text-sm">
+                                <span>{{ item.title }} x{{ item.quantity }}</span>
+                                <span class="font-medium">{{ item.price * item.quantity }} FCFA</span>
+                            </div>
+                        </div>
+                        <div v-if="restaurant.deliveryFee > 0" class="flex justify-between text-sm text-gray-600 mt-2 pt-2 border-t border-gray-200">
+                            <span>Frais de livraison</span>
+                            <span>{{ restaurant.deliveryFee }} FCFA</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mode de livraison -->
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <i :class="lastCompletedOrder.deliveryMode === 'delivery' ? 'pi pi-truck text-[#47A547]' : 'pi pi-shopping-bag text-[#E6782C]'"></i>
+                        <span class="font-semibold text-[#4B2E1E]">
+                            {{ lastCompletedOrder.deliveryMode === 'delivery' ? 'Livraison à domicile' : 'Retrait sur place' }}
+                        </span>
+                    </div>
+                    <div v-if="lastCompletedOrder.deliveryMode === 'delivery' && lastCompletedOrder.deliveryAddress" class="text-sm text-gray-600">
+                        {{ lastCompletedOrder.deliveryAddress.street }}, {{ lastCompletedOrder.deliveryAddress.quartier }}{{ lastCompletedOrder.deliveryAddress.commune ? ', ' + lastCompletedOrder.deliveryAddress.commune : '' }}
+                    </div>
+                </div>
+
+                <!-- Total -->
+                <div class="bg-[#47A547] text-white p-4 rounded-lg flex justify-between items-center">
+                    <span class="font-bold text-lg">Total</span>
+                    <span class="font-bold text-xl">{{ lastCompletedOrder.totalAmount }} FCFA</span>
+                </div>
+
+                <!-- Message -->
+                <div class="text-center text-gray-600 text-sm">
+                    <p>Vos restauratrices préparent votre commande avec amour.</p>
+                </div>
+
+                <!-- Boutons -->
+                <div class="flex space-x-3">
+                    <Button label="Fermer" text class="flex-1 text-gray-600" @click="showOrderConfirmation = false" />
+                    <Button label="Voir mes commandes" icon="pi pi-shopping-bag" class="flex-1 bg-[#47A547] hover:bg-[#3d8f3d] text-white" @click="showOrderConfirmation = false; showOrdersModal = true" />
+                </div>
+            </div>
+        </Dialog>
 
         <!-- Toast Messages -->
         <Toast />

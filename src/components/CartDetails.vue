@@ -4,7 +4,11 @@ import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
 
 const props = defineProps({
-    items: Array
+    items: Array,
+    maxQuantities: {
+        type: Object,
+        default: () => ({})
+    }
 });
 
 defineEmits(['update-quantity', 'remove-item', 'checkout']);
@@ -37,7 +41,7 @@ const totalPrice = computed(() => {
                 <div class="flex items-center space-x-2">
                     <Button icon="pi pi-minus" size="small" text @click="$emit('update-quantity', item.id, item.quantity - 1)" />
                     <span class="w-8 text-center font-medium">{{ item.quantity }}</span>
-                    <Button icon="pi pi-plus" size="small" text @click="$emit('update-quantity', item.id, item.quantity + 1)" />
+                    <Button icon="pi pi-plus" size="small" text @click="$emit('update-quantity', item.id, item.quantity + 1)" :disabled="maxQuantities[item.id] !== undefined && item.quantity >= maxQuantities[item.id]" />
                 </div>
 
                 <Button icon="pi pi-trash" size="small" text severity="danger" @click="$emit('remove-item', item.id)" />
