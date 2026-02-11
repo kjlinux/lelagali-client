@@ -14,6 +14,7 @@ import MenuFilters from '@/components/MenuFilters.vue';
 import MenuGrid from '@/components/MenuGrid.vue';
 import OrdersHistory from '@/components/OrdersHistory.vue';
 import PaymentModal from '@/components/PaymentModal.vue';
+import UserProfile from '@/components/UserProfile.vue';
 import authService from '@/service/AuthService';
 import commandeService from '@/service/CommandeService';
 import platService from '@/service/PlatService';
@@ -34,6 +35,7 @@ const showMenuDialog = ref(false);
 const showAuthModal = ref(false);
 const showPaymentModal = ref(false);
 const showOrdersModal = ref(false);
+const showProfileModal = ref(false);
 const selectedMenu = ref(null);
 const user = ref(null);
 const orderData = ref(null);
@@ -127,7 +129,20 @@ const loadCartFromStorage = () => {
     try {
         const saved = localStorage.getItem(CART_STORAGE_KEY);
         if (saved) {
-            cartItems.value = JSON.parse(saved);
+            const savedCart = JSON.parse(saved);
+            // Enrichir les items du panier avec les données complètes des menus
+            cartItems.value = savedCart.map(savedItem => {
+                const fullMenu = menus.value.find(m => m.id === savedItem.id);
+                if (fullMenu) {
+                    // Fusionner les données sauvegardées avec les données complètes du menu
+                    return {
+                        ...fullMenu,
+                        quantity: savedItem.quantity // Garder la quantité du panier
+                    };
+                }
+                // Si le menu n'existe plus, garder l'item tel quel
+                return savedItem;
+            });
             console.log('Panier restauré:', cartItems.value.length, 'articles');
         }
     } catch (error) {
@@ -304,16 +319,21 @@ const handleShowOrders = () => {
     showOrdersModal.value = true;
 };
 
-const handlePaymentSuccess = async (orderDetails) => {
-    // Recharger les commandes depuis l'API
-    await loadOrders();
+const handleShowProfile = () => {
+    showProfileModal.value = true;
+};
 
-    // Trouver la dernière commande ajoutée (devrait être la première dans la liste)
-    const newOrder = orders.value[0];
-    if (newOrder) {
-        lastCompletedOrder.value = newOrder;
-        showOrderConfirmation.value = true;
-    }
+const handlePaymentSuccess = async (orderDetails) => {
+    // Utiliser les détails de commande reçus de PaymentModal
+    lastCompletedOrder.value = {
+        ...orderDetails,
+        // Formater le montant pour l'affichage
+        totalAmount: parseInt(orderDetails.totalAmount).toLocaleString('fr-FR')
+    };
+    showOrderConfirmation.value = true;
+
+    // Recharger les commandes depuis l'API pour mettre à jour la liste
+    await loadOrders();
 
     toast.add({
         severity: 'success',
@@ -382,40 +402,40 @@ const loadOrders = async () => {
         orders.value = data.map((commande) => ({
             id: commande.numero_commande,
             date: new Date(commande.created_at),
-            totalAmount: parseFloat(commande.montant_total),
+            totalAmount: parseInt(commande.total_general).toLocaleString('fr-FR'),
             deliveryMode: commande.type_service === 'livraison' ? 'delivery' : 'pickup',
-            status: mapStatus(commande.statut),
+            status: mapStatus(commande.status),
             deliveryAddress: commande.type_service === 'livraison'
                 ? {
-                      street: commande.adresse_livraison,
-                      quartier: commande.quartier_livraison,
-                      commune: commande.quartier_livraison,
-                      phone: user.value.phone || ''
+                      street: commande.adresse_livraison || '',
+                      quartier: commande.quartier_livraison?.nom || '',
+                      commune: commande.quartier_livraison?.nom || '',
+                      phone: commande.client?.phone || user.value.phone || ''
                   }
                 : null,
             restaurantOrders: {
-                [commande.restaurateur?.nom || 'Restaurant']: {
+                [commande.restaurateur?.name || 'Restaurant']: {
                     items: (commande.items || []).map((item) => ({
                         id: item.plat_id,
                         title: item.plat?.nom || 'Plat',
                         quantity: item.quantite,
-                        price: parseFloat(item.prix_unitaire)
+                        price: parseInt(item.prix_unitaire)
                     })),
-                    paymentMethod: commande.moyen_paiement?.code || 'cash',
-                    amount: parseFloat(commande.montant_total),
-                    deliveryFee: parseFloat(commande.frais_livraison || 0),
-                    status: mapStatus(commande.statut),
+                    paymentMethod: commande.moyen_paiement?.nom || 'cash',
+                    amount: parseInt(commande.total_general).toLocaleString('fr-FR'),
+                    deliveryFee: parseInt(commande.frais_livraison || 0),
+                    status: mapStatus(commande.status),
                     deliveredItems: commande.type_service === 'livraison' ? (commande.items || []).map((item) => ({
                         id: item.plat_id,
                         title: item.plat?.nom || 'Plat',
                         quantity: item.quantite,
-                        price: parseFloat(item.prix_unitaire)
+                        price: parseInt(item.prix_unitaire)
                     })) : [],
                     pickupItems: commande.type_service === 'retrait' ? (commande.items || []).map((item) => ({
                         id: item.plat_id,
                         title: item.plat?.nom || 'Plat',
                         quantity: item.quantite,
-                        price: parseFloat(item.prix_unitaire)
+                        price: parseInt(item.prix_unitaire)
                     })) : []
                 }
             }
@@ -435,34 +455,73 @@ onMounted(async () => {
         user.value = authService.getCurrentUser();
     }
 
-    // 2. Restaurer le panier depuis localStorage
-    loadCartFromStorage();
-
-    // 3. Charger les menus du jour depuis l'API
+    // 2. Charger les menus du jour depuis l'API (AVANT le panier)
     loading.value = true;
     try {
         const menusData = await platService.getTodayMenus();
 
         // Transformer les données backend pour correspondre au format frontend
-        menus.value = menusData.map((plat) => ({
-            id: plat.id,
-            title: plat.nom,
-            description: plat.description,
-            price: parseInt(plat.prix),
-            image: plat.image_url || 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400&h=300&fit=crop',
-            restauratrice: plat.restaurateur?.nom || 'Restaurant',
-            quartier: plat.restaurateur?.quartier?.nom || 'Ouagadougou',
-            quantity: plat.quantite_disponible || 0,
-            livraison: plat.livraison_disponible || false,
-            tempsPreparation: plat.temps_preparation ? `${plat.temps_preparation} min` : '30 min',
-            ingredients: plat.ingredients ? plat.ingredients.split(',').map((i) => i.trim()) : [],
-            rating: plat.note_moyenne || 4.5,
-            reviews: plat.nombre_avis || 0,
-            paymentMethods: ['mobile_money', 'wave', 'orange_money', 'cash_delivery', 'cash_pickup'],
-            restaurateur_id: plat.restaurateur_id
-        }));
+        menus.value = menusData.map((plat) => {
+            // Récupérer les moyens de paiement configurés par le restaurateur
+            const restaurateurMoyensPaiement = plat.restaurateur?.moyens_paiement || [];
+
+            // Mapper les moyens de paiement du backend vers le format frontend
+            const paymentMethods = [];
+
+            restaurateurMoyensPaiement.forEach((moyen) => {
+                // Déterminer le type de moyen de paiement en fonction du nom ou du type
+                const nom = moyen.nom.toLowerCase();
+                const type = moyen.type?.toLowerCase();
+
+                if (nom.includes('mobile money') || nom.includes('mtn') || nom.includes('moov')) {
+                    paymentMethods.push('mobile_money');
+                } else if (nom.includes('orange')) {
+                    paymentMethods.push('orange_money');
+                } else if (nom.includes('wave')) {
+                    paymentMethods.push('wave');
+                } else if (type === 'cash' || nom.includes('espèces')) {
+                    // Si le restaurateur propose la livraison, ajouter cash_delivery
+                    if (plat.restaurateur?.livraison_disponible) {
+                        paymentMethods.push('cash_delivery');
+                    }
+                    // Toujours permettre le paiement en espèces au retrait
+                    paymentMethods.push('cash_pickup');
+                }
+            });
+
+            // S'assurer qu'il y a au moins un moyen de paiement
+            if (paymentMethods.length === 0) {
+                // Par défaut, permettre le paiement en espèces au retrait
+                paymentMethods.push('cash_pickup');
+            }
+
+            return {
+                id: plat.id,
+                title: plat.nom,
+                description: plat.description,
+                price: parseInt(plat.prix),
+                image: plat.image_url || 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400&h=300&fit=crop',
+                restauratrice: plat.restaurateur?.nom || 'Restaurant',
+                quartier: plat.restaurateur?.quartier?.nom || 'Ouagadougou',
+                quantity: plat.quantite_disponible || 0,
+                livraison: plat.livraison_disponible !== false, // Par défaut true
+                livraison_disponible: plat.livraison_disponible !== false,
+                retrait: plat.retrait_disponible !== false, // Par défaut true
+                tempsPreparation: plat.temps_preparation ? `${plat.temps_preparation} min` : '30 min',
+                ingredients: plat.ingredients ? plat.ingredients.split(',').map((i) => i.trim()) : [],
+                rating: plat.note_moyenne || 4.5,
+                reviews: plat.nombre_avis || 0,
+                paymentMethods: [...new Set(paymentMethods)], // Supprimer les doublons
+                restaurateur_id: plat.restaurateur_id,
+                // Ajouter les données complètes du restaurateur pour PaymentModal
+                restaurateur: plat.restaurateur
+            };
+        });
 
         console.log('Menus chargés:', menus.value.length);
+
+        // 3. Restaurer le panier depuis localStorage (APRÈS les menus)
+        loadCartFromStorage();
     } catch (error) {
         console.error('Erreur chargement menus:', error);
         toast.add({
@@ -485,7 +544,7 @@ onMounted(async () => {
 <template>
     <!-- <router-view /> -->
     <div id="app" class="min-h-screen bg-[#FDF6EC] flex flex-col">
-        <AppHeader @search="handleSearch" @login="handleLogin" @logout="handleLogout" @show-orders="handleShowOrders" :user="user" :pending-orders-count="pendingOrdersCount" />
+        <AppHeader @search="handleSearch" @login="handleLogin" @logout="handleLogout" @show-orders="handleShowOrders" @show-profile="handleShowProfile" :user="user" :pending-orders-count="pendingOrdersCount" />
 
         <main class="flex-1">
             <div class="container mx-auto px-4 py-6">
@@ -577,6 +636,11 @@ onMounted(async () => {
         <!-- Orders Modal -->
         <Dialog v-model:visible="showOrdersModal" modal header="Mes commandes" :style="{ width: '90vw', maxWidth: '1200px', height: '90vh' }" :closable="true">
             <OrdersHistory :user="user" :orders="orders" />
+        </Dialog>
+
+        <!-- Profile Modal -->
+        <Dialog v-model:visible="showProfileModal" modal header="Mon Profil" :style="{ width: '90vw', maxWidth: '1200px', maxHeight: '90vh' }" :closable="true">
+            <UserProfile @logout="showProfileModal = false; handleLogout()" />
         </Dialog>
 
         <!-- Auth Modal -->

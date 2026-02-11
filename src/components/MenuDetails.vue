@@ -51,10 +51,20 @@ defineEmits(['add-to-cart', 'close']);
                 </div>
             </div>
 
-            <div class="flex items-center space-x-4">
-                <Rating v-model="menu.rating" readonly :cancel="false" class="text-[#F8C346]" />
-                <span class="text-sm text-gray-600">{{ menu.reviews }} avis</span>
-                <Tag :value="menu.livraison ? 'Livraison disponible' : 'Retrait uniquement'" :class="menu.livraison ? 'bg-[#47A547]' : 'bg-[#E6782C]'" class="text-white" />
+            <div class="space-y-3">
+                <div class="flex items-center space-x-4">
+                    <Rating v-model="menu.rating" readonly :cancel="false" class="text-[#F8C346]" />
+                    <span class="text-sm text-gray-600">{{ menu.reviews }} avis</span>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-[#4B2E1E] mb-2">Options de service :</h4>
+                    <div class="flex flex-wrap gap-2">
+                        <Tag v-if="menu.livraison" icon="pi pi-truck" value="Livraison disponible" class="bg-[#47A547] text-white" />
+                        <Tag v-if="menu.retrait" icon="pi pi-shopping-bag" value="Retrait disponible" class="bg-[#3B82F6] text-white" />
+                        <Tag v-if="!menu.livraison && !menu.retrait" value="Non disponible" class="bg-gray-400 text-white" />
+                    </div>
+                </div>
             </div>
         </div>
 

@@ -34,7 +34,7 @@ const userMenuItems = ref([
         label: 'Mon profil',
         icon: 'pi pi-user',
         command: () => {
-            // Navigation vers le profil
+            emit('show-profile');
         }
     },
     {
@@ -49,7 +49,7 @@ const userMenuItems = ref([
     }
 ]);
 
-const emit = defineEmits(['search', 'login', 'logout', 'show-orders']);
+const emit = defineEmits(['search', 'login', 'logout', 'show-orders', 'show-profile']);
 
 const toggleUserMenu = (event) => {
     userMenu.value.toggle(event);
@@ -150,6 +150,8 @@ const toggleUserMenu = (event) => {
                     <Button label="Mes commandes" icon="pi pi-shopping-bag" text class="w-full justify-start text-[#4B2E1E] hover:bg-[#FDF6EC] font-medium p-3 rounded-lg" @click="mobileMenuVisible = false; $emit('show-orders')" />
                     <Badge v-if="pendingOrdersCount > 0" :value="pendingOrdersCount" class="absolute top-3 right-3 bg-[#E6782C]" />
                 </div>
+
+                <Button v-if="user" label="Mon profil" icon="pi pi-user" text class="w-full justify-start text-[#4B2E1E] hover:bg-[#FDF6EC] font-medium p-3 rounded-lg" @click="mobileMenuVisible = false; $emit('show-profile')" />
 
                 <hr class="my-4 border-gray-200" />
 

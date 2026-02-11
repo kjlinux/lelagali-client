@@ -15,7 +15,7 @@ class ApiService {
      * Récupérer le token depuis le localStorage
      */
     getToken() {
-        return localStorage.getItem('auth_token');
+        return localStorage.getItem('client_auth_token');
     }
 
     /**
@@ -23,10 +23,10 @@ class ApiService {
      */
     setToken(token) {
         if (token) {
-            localStorage.setItem('auth_token', token);
+            localStorage.setItem('client_auth_token', token);
             this.token = token;
         } else {
-            localStorage.removeItem('auth_token');
+            localStorage.removeItem('client_auth_token');
             this.token = null;
         }
     }
@@ -35,7 +35,7 @@ class ApiService {
      * Récupérer l'utilisateur connecté depuis le localStorage
      */
     getUser() {
-        const userStr = localStorage.getItem('user');
+        const userStr = localStorage.getItem('client_user');
         return userStr ? JSON.parse(userStr) : null;
     }
 
@@ -44,9 +44,9 @@ class ApiService {
      */
     setUser(user) {
         if (user) {
-            localStorage.setItem('user', JSON.stringify(user));
+            localStorage.setItem('client_user', JSON.stringify(user));
         } else {
-            localStorage.removeItem('user');
+            localStorage.removeItem('client_user');
         }
     }
 

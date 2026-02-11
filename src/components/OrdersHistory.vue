@@ -216,7 +216,7 @@ const getPaymentMethodName = (method) => {
                                                 <div class="space-y-1 pl-6">
                                                     <div v-for="item in restaurant.deliveredItems" :key="`delivery-${item.id}`" class="flex justify-between text-sm">
                                                         <span>{{ item.title }} x{{ item.quantity }}</span>
-                                                        <span class="font-medium">{{ item.price * item.quantity }} FCFA</span>
+                                                        <span class="font-medium">{{ (item.price * item.quantity).toLocaleString('fr-FR') }} FCFA</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -230,7 +230,7 @@ const getPaymentMethodName = (method) => {
                                                 <div class="space-y-1 pl-6">
                                                     <div v-for="item in restaurant.pickupItems" :key="`pickup-${item.id}`" class="flex justify-between text-sm">
                                                         <span>{{ item.title }} x{{ item.quantity }}</span>
-                                                        <span class="font-medium">{{ item.price * item.quantity }} FCFA</span>
+                                                        <span class="font-medium">{{ (item.price * item.quantity).toLocaleString('fr-FR') }} FCFA</span>
                                                     </div>
                                                 </div>
                                             </div>

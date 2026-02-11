@@ -50,7 +50,8 @@ defineEmits(['add-to-cart', 'view-details']);
                         <span>{{ menu.tempsPreparation }}</span>
                     </div>
                     <div class="flex items-center space-x-1">
-                        <Tag :value="menu.livraison ? 'Livraison' : 'Retrait'" :class="menu.livraison ? 'bg-[#47A547]' : 'bg-[#E6782C]'" class="text-white text-xs" />
+                        <Tag v-if="menu.livraison" icon="pi pi-truck" value="Livraison" class="bg-[#47A547] text-white text-xs" />
+                        <Tag v-if="menu.retrait" icon="pi pi-shopping-bag" value="Retrait" class="bg-[#3B82F6] text-white text-xs" />
                     </div>
                 </div>
             </div>

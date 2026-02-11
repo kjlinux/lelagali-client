@@ -1,13 +1,13 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
+import Dropdown from 'primevue/dropdown';
 import { useToast } from 'primevue/usetoast';
 import authService from '../service/AuthService';
 import commandeService from '../service/CommandeService';
-import referenceService from '../service/ReferenceService';
 
 const props = defineProps({
     visible: Boolean,
@@ -24,6 +24,7 @@ const localVisible = computed({
 
 const selectedDeliveryMode = ref('pickup');
 const selectedPaymentMethods = ref({});
+const selectedQuartiers = ref({});
 const processing = ref(false);
 const paymentReferences = ref({});
 const paymentPhones = ref({});
@@ -37,7 +38,7 @@ const deliveryAddress = ref({
     instructions: ''
 });
 
-// Adresses des restaurants
+// Adresses des restaurants (backup si pas dans les données)
 const restaurantAddresses = {
     'Maman Adjoua': 'Rue des Palmiers, Plateau - Face à la pharmacie centrale',
     'Tante Fatou': 'Boulevard Lagunaire, Cocody Angré 8ème tranche',
@@ -52,17 +53,24 @@ const restaurantAddresses = {
     'Maman Fanta': 'Carrefour Anador, Abobo - Restaurant Fanta'
 };
 
-// Regroupement des articles par restaurant
+// Regroupement des articles par restaurant avec toutes les infos du restaurateur
 const itemsByRestaurant = computed(() => {
     if (!props.orderData?.items) return {};
 
     const groups = {};
     props.orderData.items.forEach((item) => {
-        const restaurant = item.restauratrice;
-        if (!groups[restaurant]) {
-            groups[restaurant] = [];
+        const restaurantName = item.restauratrice || item.restaurateur?.nom || 'Restaurant';
+        const restaurantId = item.restaurateur_id;
+
+        if (!groups[restaurantId]) {
+            groups[restaurantId] = {
+                name: restaurantName,
+                id: restaurantId,
+                items: [],
+                restaurateurData: item.restaurateur || null
+            };
         }
-        groups[restaurant].push(item);
+        groups[restaurantId].items.push(item);
     });
     return groups;
 });
@@ -70,13 +78,23 @@ const itemsByRestaurant = computed(() => {
 // Analyser les options de livraison pour chaque restaurant
 const deliveryAnalysis = computed(() => {
     const result = {};
-    Object.entries(itemsByRestaurant.value).forEach(([restaurant, items]) => {
-        const deliveryItems = items.filter((item) => item.livraison);
-        const pickupOnlyItems = items.filter((item) => !item.livraison);
+    Object.entries(itemsByRestaurant.value).forEach(([restaurantId, restaurantData]) => {
+        const items = restaurantData.items;
+        const restaurateur = restaurantData.restaurateurData;
 
-        result[restaurant] = {
-            hasDeliveryItems: deliveryItems.length > 0,
-            hasPickupOnlyItems: pickupOnlyItems.length > 0,
+        // Vérifier si le restaurateur a des zones de livraison configurées
+        const hasDeliveryZones = restaurateur?.zones_livraison && restaurateur.zones_livraison.length > 0;
+        const deliveryZones = restaurateur?.zones_livraison || [];
+
+        // Vérifier quels articles supportent la livraison
+        const deliveryItems = items.filter((item) => item.livraison_disponible || item.livraison);
+        const pickupOnlyItems = items.filter((item) => !(item.livraison_disponible || item.livraison));
+
+        result[restaurantId] = {
+            hasDeliveryZones: hasDeliveryZones,
+            deliveryZones: deliveryZones,
+            hasDeliveryItems: deliveryItems.length > 0 && hasDeliveryZones,
+            hasPickupOnlyItems: pickupOnlyItems.length > 0 || !hasDeliveryZones,
             deliveryItems,
             pickupOnlyItems,
             allItems: items
@@ -101,8 +119,9 @@ const globalDeliveryOptions = computed(() => {
 // Calculer les totaux en tenant compte du mode de livraison choisi
 const totalsByRestaurant = computed(() => {
     const result = {};
-    Object.entries(itemsByRestaurant.value).forEach(([restaurant, items]) => {
-        const analysis = deliveryAnalysis.value[restaurant];
+    Object.entries(itemsByRestaurant.value).forEach(([restaurantId, restaurantData]) => {
+        const items = restaurantData.items;
+        const analysis = deliveryAnalysis.value[restaurantId];
         const itemsTotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
 
         let deliveryFee = 0;
@@ -114,19 +133,22 @@ const totalsByRestaurant = computed(() => {
             deliveredItems = analysis.deliveryItems;
             pickupItems = analysis.pickupOnlyItems;
 
-            // Frais de livraison seulement si il y a des articles à livrer
-            if (deliveredItems.length > 0) {
-                deliveryFee = 500;
+            // Frais de livraison basés sur le quartier sélectionné et le tarif du restaurant
+            if (deliveredItems.length > 0 && selectedQuartiers.value[restaurantId]) {
+                const selectedZone = analysis.deliveryZones.find(
+                    zone => zone.quartier_id === selectedQuartiers.value[restaurantId]
+                );
+                deliveryFee = selectedZone ? parseInt(selectedZone.prix) || 0 : 0;
             }
         } else {
             // En mode retrait : tous les articles sont à récupérer
             pickupItems = items;
         }
 
-        result[restaurant] = {
-            itemsTotal,
-            deliveryFee,
-            total: itemsTotal + deliveryFee,
+        result[restaurantId] = {
+            itemsTotal: parseInt(itemsTotal) || 0,
+            deliveryFee: parseInt(deliveryFee) || 0,
+            total: (parseInt(itemsTotal) || 0) + (parseInt(deliveryFee) || 0),
             deliveredItems,
             pickupItems,
             hasDelivery: deliveredItems.length > 0,
@@ -141,30 +163,69 @@ const finalAmount = computed(() => {
     return Object.values(totalsByRestaurant.value).reduce((total, restaurant) => total + restaurant.total, 0);
 });
 
-// Méthodes de paiement disponibles par restaurant
+// Méthodes de paiement disponibles par restaurant (depuis la configuration backend)
 const availablePaymentMethodsByRestaurant = computed(() => {
     const result = {};
-    Object.entries(itemsByRestaurant.value).forEach(([restaurant, items]) => {
-        const allMethods = [...new Set(items.flatMap((item) => item.paymentMethods))];
-        const restaurantTotals = totalsByRestaurant.value[restaurant];
+    Object.entries(itemsByRestaurant.value).forEach(([restaurantId, restaurantData]) => {
+        const restaurateur = restaurantData.restaurateurData;
+        const restaurantTotals = totalsByRestaurant.value[restaurantId];
 
-        // Filtrer selon ce qui se passe pour ce restaurant
-        result[restaurant] = allMethods.filter((method) => {
-            if (restaurantTotals.hasDelivery && !restaurantTotals.hasPickup) {
-                // Que de la livraison pour ce restaurant
-                return !method.includes('pickup');
-            } else if (!restaurantTotals.hasDelivery && restaurantTotals.hasPickup) {
-                // Que du retrait pour ce restaurant
-                return !method.includes('delivery');
-            } else if (restaurantTotals.hasDelivery && restaurantTotals.hasPickup) {
-                // Mix : accepter toutes les méthodes (cash_delivery pour la partie livrée)
+        // Récupérer les moyens de paiement configurés par le restaurateur
+        let configuredMethods = restaurateur?.moyens_paiement || [];
+
+        // Filtrer selon le mode de livraison/retrait
+        const availableMethods = configuredMethods.filter((method) => {
+            const methodType = method.type_paiement || getPaymentType(method.nom);
+
+            // Cash : disponible pour livraison OU retrait
+            if (methodType === 'cash') {
+                return restaurantTotals.hasDelivery || restaurantTotals.hasPickup;
+            }
+            // Méthodes électroniques : toujours disponibles
+            if (methodType === 'mobile_money' || methodType === 'other') {
                 return true;
             }
+            // Autres méthodes : toujours disponibles
             return true;
         });
+
+        result[restaurantId] = availableMethods;
     });
     return result;
 });
+
+// Helper pour formater les montants
+function formatAmount(amount) {
+    const num = parseInt(amount) || 0;
+    return num.toLocaleString('fr-FR');
+}
+
+// Helper pour déterminer le type de paiement
+function getPaymentType(nom) {
+    const nomLower = nom.toLowerCase();
+    if (nomLower.includes('espèces') || nomLower.includes('cash')) {
+        return 'cash';
+    }
+    if (nomLower.includes('orange') || nomLower.includes('mtn') || nomLower.includes('moov') || nomLower.includes('mobile')) {
+        return 'mobile_money';
+    }
+    return 'other';
+}
+
+// Helper pour obtenir le nom d'affichage de la méthode de paiement
+function getPaymentMethodDisplay(method, hasDelivery, hasPickup) {
+    const nomLower = method.nom.toLowerCase();
+    if (nomLower.includes('espèces') || nomLower.includes('cash')) {
+        if (hasDelivery && !hasPickup) {
+            return 'Cash à la livraison';
+        } else if (hasPickup && !hasDelivery) {
+            return 'Cash au retrait';
+        } else {
+            return 'Cash (livraison/retrait)';
+        }
+    }
+    return method.nom;
+}
 
 // Vérifier si on peut procéder
 const canProceed = computed(() => {
@@ -173,22 +234,31 @@ const canProceed = computed(() => {
 
     // Vérifier l'adresse de livraison si nécessaire
     if (selectedDeliveryMode.value === 'delivery') {
-        if (!deliveryAddress.value.street || !deliveryAddress.value.quartier || !deliveryAddress.value.phone) {
+        if (!deliveryAddress.value.street || !deliveryAddress.value.phone) {
             return false;
+        }
+
+        // Vérifier qu'un quartier est sélectionné pour chaque restaurant avec livraison
+        for (const [restaurantId, totals] of Object.entries(totalsByRestaurant.value)) {
+            if (totals.hasDelivery && !selectedQuartiers.value[restaurantId]) {
+                return false;
+            }
         }
     }
 
     // Vérifier qu'une méthode de paiement est sélectionnée pour chaque restaurant
-    const restaurants = Object.keys(itemsByRestaurant.value);
-    for (const restaurant of restaurants) {
-        if (!selectedPaymentMethods.value[restaurant]) {
+    const restaurantIds = Object.keys(itemsByRestaurant.value);
+    for (const restaurantId of restaurantIds) {
+        if (!selectedPaymentMethods.value[restaurantId]) {
             return false;
         }
 
         // Vérifier les infos de paiement en ligne si nécessaire
-        const paymentMethod = selectedPaymentMethods.value[restaurant];
-        if (['mobile_money', 'orange_money', 'wave'].includes(paymentMethod)) {
-            if (!paymentReferences.value[restaurant] || !paymentPhones.value[restaurant]) {
+        const selectedMethod = selectedPaymentMethods.value[restaurantId];
+        const methodType = selectedMethod.type_paiement || getPaymentType(selectedMethod.nom);
+
+        if (methodType === 'mobile_money' || methodType === 'other') {
+            if (!paymentReferences.value[restaurantId] || !paymentPhones.value[restaurantId]) {
                 return false;
             }
         }
@@ -201,13 +271,15 @@ const canProceed = computed(() => {
 const validatePaymentInfo = () => {
     const newErrors = {};
 
-    Object.entries(selectedPaymentMethods.value).forEach(([restaurant, method]) => {
-        if (['mobile_money', 'orange_money', 'wave'].includes(method)) {
-            if (!paymentReferences.value[restaurant]?.trim()) {
-                newErrors[`${restaurant}_reference`] = 'Référence de transaction requise';
+    Object.entries(selectedPaymentMethods.value).forEach(([restaurantId, method]) => {
+        const methodType = method.type_paiement || getPaymentType(method.nom);
+
+        if (methodType === 'mobile_money' || methodType === 'other') {
+            if (!paymentReferences.value[restaurantId]?.trim()) {
+                newErrors[`${restaurantId}_reference`] = 'Référence de transaction requise';
             }
-            if (!paymentPhones.value[restaurant]?.trim()) {
-                newErrors[`${restaurant}_phone`] = 'Numéro de paiement requis';
+            if (!paymentPhones.value[restaurantId]?.trim()) {
+                newErrors[`${restaurantId}_phone`] = 'Numéro de paiement requis';
             }
         }
     });
@@ -219,6 +291,12 @@ const validatePaymentInfo = () => {
 // Traitement du paiement
 const processPayment = async () => {
     if (!validatePaymentInfo()) {
+        toast.add({
+            severity: 'warn',
+            summary: 'Informations manquantes',
+            detail: 'Veuillez remplir tous les champs requis',
+            life: 3000
+        });
         return;
     }
 
@@ -231,68 +309,72 @@ const processPayment = async () => {
         }
 
         // Créer une commande pour chaque restaurant
-        const commandesPromises = Object.entries(itemsByRestaurant.value).map(async ([restaurant, items]) => {
-            const paymentMethod = selectedPaymentMethods.value[restaurant];
-            const totals = totalsByRestaurant.value[restaurant];
-
-            // Récupérer l'ID du restaurateur depuis le premier item (tous les items d'un restaurant ont le même restaurateur_id)
-            const restaurateurId = items[0].restaurateur_id;
-
-            // Mapper le nom de la méthode de paiement vers l'ID
-            // Note: En production, vous devriez récupérer les moyens de paiement depuis l'API
-            const paymentMethodMap = {
-                mobile_money: 1,
-                orange_money: 2,
-                wave: 3,
-                cash_delivery: 4,
-                cash_pickup: 5
-            };
+        const commandesPromises = Object.entries(itemsByRestaurant.value).map(async ([restaurantId, restaurantData]) => {
+            const selectedMethod = selectedPaymentMethods.value[restaurantId];
+            const totals = totalsByRestaurant.value[restaurantId];
 
             const commandeData = {
                 client_id: user.id,
-                restaurateur_id: restaurateurId,
-                type_service: selectedDeliveryMode.value === 'delivery' ? 'livraison' : 'retrait',
-                adresse_livraison: selectedDeliveryMode.value === 'delivery' ? deliveryAddress.value.street : null,
-                quartier_livraison: selectedDeliveryMode.value === 'delivery' ? deliveryAddress.value.quartier : null,
-                moyen_paiement_id: paymentMethodMap[paymentMethod] || 1,
-                notes_client: deliveryAddress.value.instructions || '',
-                reference_paiement: paymentReferences.value[restaurant] || null,
-                numero_paiement: paymentPhones.value[restaurant] || null,
-                items: items.map((item) => ({
+                restaurateur_id: restaurantId,
+                type_service: selectedDeliveryMode.value === 'delivery' && totals.hasDelivery ? 'livraison' : 'retrait',
+                moyen_paiement_id: selectedMethod.id,
+                items: restaurantData.items.map((item) => ({
                     plat_id: item.id,
                     quantite: item.quantity,
                     prix_unitaire: item.price
                 }))
             };
 
+            // Ajouter les infos de livraison si applicable
+            if (commandeData.type_service === 'livraison') {
+                const selectedQuartier = selectedQuartiers.value[restaurantId];
+                commandeData.adresse_livraison = `${deliveryAddress.value.street}, ${deliveryAddress.value.commune || ''}`.trim();
+                commandeData.quartier_livraison_id = selectedQuartier;
+            }
+
+            // Ajouter notes
+            if (deliveryAddress.value.phone) {
+                commandeData.notes_client = `Tél: ${deliveryAddress.value.phone}`;
+                if (deliveryAddress.value.instructions) {
+                    commandeData.notes_client += ` | ${deliveryAddress.value.instructions}`;
+                }
+            }
+
+            // Ajouter les références de paiement si paiement électronique
+            const methodType = selectedMethod.type_paiement || getPaymentType(selectedMethod.nom);
+            if (methodType === 'mobile_money' || methodType === 'other') {
+                commandeData.reference_paiement = paymentReferences.value[restaurantId];
+                commandeData.numero_paiement = paymentPhones.value[restaurantId];
+            }
+
             return await commandeService.createCommande(commandeData);
         });
 
         const commandes = await Promise.all(commandesPromises);
 
-        // Construire l'objet de réponse dans le format attendu par App.vue
+        // Construire l'objet de réponse
         const orderDetails = {
-            orderId: commandes[0].numero_commande || 'CMD-' + Date.now(),
+            orderId: commandes[0]?.data?.numero_commande || 'CMD-' + Date.now(),
             deliveryMode: selectedDeliveryMode.value,
             totalAmount: finalAmount.value,
             deliveryAddress: selectedDeliveryMode.value === 'delivery' ? deliveryAddress.value : null,
             restaurantOrders: {}
         };
 
-        Object.entries(itemsByRestaurant.value).forEach(([restaurant, items], index) => {
+        Object.entries(itemsByRestaurant.value).forEach(([restaurantId, restaurantData], index) => {
             const commande = commandes[index];
-            const totals = totalsByRestaurant.value[restaurant];
+            const totals = totalsByRestaurant.value[restaurantId];
 
-            orderDetails.restaurantOrders[restaurant] = {
-                items,
-                paymentMethod: selectedPaymentMethods.value[restaurant],
+            orderDetails.restaurantOrders[restaurantData.name] = {
+                items: restaurantData.items,
+                paymentMethod: selectedPaymentMethods.value[restaurantId],
                 amount: totals.total,
                 deliveryFee: totals.deliveryFee,
                 deliveredItems: totals.deliveredItems,
                 pickupItems: totals.pickupItems,
-                commandeId: commande.id,
-                reference: paymentReferences.value[restaurant] || null,
-                phone: paymentPhones.value[restaurant] || null
+                commandeId: commande?.data?.id,
+                reference: paymentReferences.value[restaurantId] || null,
+                phone: paymentPhones.value[restaurantId] || null
             };
         });
 
@@ -300,16 +382,19 @@ const processPayment = async () => {
 
         toast.add({
             severity: 'success',
-            summary: 'Commande créée',
-            detail: 'Votre commande a été enregistrée avec succès !',
+            summary: 'Commandes créées',
+            detail: `${commandes.length} commande(s) enregistrée(s) avec succès !`,
             life: 5000
         });
+
+        // Fermer le modal
+        localVisible.value = false;
     } catch (error) {
         console.error('Erreur création commande:', error);
         toast.add({
             severity: 'error',
             summary: 'Erreur de paiement',
-            detail: error.message || 'Impossible de traiter votre commande. Veuillez réessayer.',
+            detail: error.response?.data?.message || error.message || 'Impossible de traiter votre commande. Veuillez réessayer.',
             life: 5000
         });
     } finally {
@@ -324,6 +409,7 @@ watch(
         if (newValue) {
             selectedDeliveryMode.value = globalDeliveryOptions.value.canChooseDelivery ? 'delivery' : 'pickup';
             selectedPaymentMethods.value = {};
+            selectedQuartiers.value = {};
             paymentReferences.value = {};
             paymentPhones.value = {};
             errors.value = {};
@@ -353,47 +439,51 @@ watch(selectedDeliveryMode, () => {
             <div class="space-y-4">
                 <h3 class="font-semibold text-[#4B2E1E] mb-3">Résumé de votre commande</h3>
 
-                <div v-for="(items, restaurant) in itemsByRestaurant" :key="restaurant" class="bg-[#FDF6EC] p-4 rounded-lg border">
+                <div v-for="(restaurantData, restaurantId) in itemsByRestaurant" :key="restaurantId" class="bg-[#FDF6EC] p-4 rounded-lg border">
                     <div class="flex justify-between items-start mb-3">
-                        <h4 class="font-semibold text-[#4B2E1E]">{{ restaurant }}</h4>
+                        <h4 class="font-semibold text-[#4B2E1E]">{{ restaurantData.name }}</h4>
                         <div class="flex space-x-2">
-                            <span v-if="deliveryAnalysis[restaurant].hasDeliveryItems" class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded"> Livraison disponible </span>
-                            <span v-if="deliveryAnalysis[restaurant].hasPickupOnlyItems" class="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded"> Certains plats : retrait uniquement </span>
+                            <span v-if="deliveryAnalysis[restaurantId]?.hasDeliveryZones" class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">
+                                Livraison disponible
+                            </span>
+                            <span v-else class="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded">
+                                Retrait uniquement
+                            </span>
                         </div>
                     </div>
 
                     <!-- Adresse du restaurant -->
                     <div class="text-sm text-gray-600 mb-3 p-2 bg-white rounded border-l-4 border-[#47A547]">
                         <i class="pi pi-map-marker text-[#47A547] mr-1"></i>
-                        {{ restaurantAddresses[restaurant] }}
+                        {{ restaurantAddresses[restaurantData.name] || 'Adresse non disponible' }}
                     </div>
 
                     <!-- Articles de ce restaurant organisés par mode -->
                     <div class="space-y-3">
                         <!-- Articles à livrer (si mode livraison choisi) -->
-                        <div v-if="selectedDeliveryMode === 'delivery' && totalsByRestaurant[restaurant]?.deliveredItems.length > 0">
+                        <div v-if="selectedDeliveryMode === 'delivery' && totalsByRestaurant[restaurantId]?.deliveredItems.length > 0">
                             <h6 class="font-medium text-green-700 mb-2 flex items-center">
                                 <i class="pi pi-truck mr-2"></i>
                                 Articles à livrer
                             </h6>
                             <div class="space-y-1 pl-6">
-                                <div v-for="item in totalsByRestaurant[restaurant].deliveredItems" :key="`delivery-${item.id}`" class="flex justify-between text-sm">
-                                    <span>{{ item.title }} x{{ item.quantity }}</span>
-                                    <span class="font-medium">{{ item.price * item.quantity }} FCFA</span>
+                                <div v-for="item in totalsByRestaurant[restaurantId].deliveredItems" :key="`delivery-${item.id}`" class="flex justify-between text-sm">
+                                    <span>{{ item.title || item.nom }} x{{ item.quantity }}</span>
+                                    <span class="font-medium">{{ formatAmount(item.price * item.quantity) }} FCFA</span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Articles à récupérer -->
-                        <div v-if="totalsByRestaurant[restaurant]?.pickupItems.length > 0">
+                        <div v-if="totalsByRestaurant[restaurantId]?.pickupItems.length > 0">
                             <h6 class="font-medium text-orange-700 mb-2 flex items-center">
                                 <i class="pi pi-shopping-bag mr-2"></i>
                                 {{ selectedDeliveryMode === 'delivery' ? 'Articles à récupérer sur place' : 'Articles à récupérer' }}
                             </h6>
                             <div class="space-y-1 pl-6">
-                                <div v-for="item in totalsByRestaurant[restaurant].pickupItems" :key="`pickup-${item.id}`" class="flex justify-between text-sm">
-                                    <span>{{ item.title }} x{{ item.quantity }}</span>
-                                    <span class="font-medium">{{ item.price * item.quantity }} FCFA</span>
+                                <div v-for="item in totalsByRestaurant[restaurantId].pickupItems" :key="`pickup-${item.id}`" class="flex justify-between text-sm">
+                                    <span>{{ item.title || item.nom }} x{{ item.quantity }}</span>
+                                    <span class="font-medium">{{ formatAmount(item.price * item.quantity) }} FCFA</span>
                                 </div>
                             </div>
                         </div>
@@ -403,15 +493,15 @@ watch(selectedDeliveryMode, () => {
                     <div class="border-t pt-2 mt-3 space-y-1">
                         <div class="flex justify-between text-sm">
                             <span>Sous-total articles</span>
-                            <span class="font-medium">{{ totalsByRestaurant[restaurant]?.itemsTotal }} FCFA</span>
+                            <span class="font-medium">{{ formatAmount(totalsByRestaurant[restaurantId]?.itemsTotal) }} FCFA</span>
                         </div>
-                        <div v-if="totalsByRestaurant[restaurant]?.deliveryFee > 0" class="flex justify-between text-sm">
+                        <div v-if="totalsByRestaurant[restaurantId]?.deliveryFee > 0" class="flex justify-between text-sm">
                             <span>Frais de livraison</span>
-                            <span class="font-medium">{{ totalsByRestaurant[restaurant]?.deliveryFee }} FCFA</span>
+                            <span class="font-medium">{{ formatAmount(totalsByRestaurant[restaurantId]?.deliveryFee) }} FCFA</span>
                         </div>
                         <div class="flex justify-between font-bold border-t pt-1">
-                            <span>Total {{ restaurant }}</span>
-                            <span class="text-[#47A547]">{{ totalsByRestaurant[restaurant]?.total }} FCFA</span>
+                            <span>Total {{ restaurantData.name }}</span>
+                            <span class="text-[#47A547]">{{ formatAmount(totalsByRestaurant[restaurantId]?.total) }} FCFA</span>
                         </div>
                     </div>
                 </div>
@@ -420,7 +510,7 @@ watch(selectedDeliveryMode, () => {
                 <div class="bg-[#47A547] text-white p-4 rounded-lg">
                     <div class="flex justify-between font-bold text-lg">
                         <span>TOTAL GÉNÉRAL</span>
-                        <span>{{ finalAmount }} FCFA</span>
+                        <span>{{ formatAmount(finalAmount) }} FCFA</span>
                     </div>
                 </div>
             </div>
@@ -435,7 +525,7 @@ watch(selectedDeliveryMode, () => {
                         <i class="pi pi-exclamation-triangle text-yellow-600 mt-0.5"></i>
                         <div class="text-sm text-yellow-800">
                             <p class="font-medium mb-1">Commande mixte détectée :</p>
-                            <p>Certains plats ne sont disponibles qu'en retrait. Si vous choisissez la livraison, vous devrez récupérer ces plats directement chez les restauratrices concernées.</p>
+                            <p>Certains restaurateurs n'ont pas configuré de zones de livraison. Vous devrez récupérer ces plats directement chez eux.</p>
                         </div>
                     </div>
                 </div>
@@ -456,7 +546,7 @@ watch(selectedDeliveryMode, () => {
                             </div>
                             <label class="flex-1 cursor-pointer">
                                 <div class="font-medium text-[#4B2E1E]">Livraison à domicile</div>
-                                <div class="text-sm text-gray-600">+500 FCFA par restaurant (articles livrables uniquement)</div>
+                                <div class="text-sm text-gray-600">Frais variables selon le quartier et le restaurant</div>
                                 <div v-if="globalDeliveryOptions.hasPickupOnlyItems" class="text-xs text-orange-600 mt-1">Certains articles devront être récupérés sur place</div>
                             </label>
                         </div>
@@ -483,102 +573,101 @@ watch(selectedDeliveryMode, () => {
                 </div>
             </div>
 
-            <!-- Adresse de livraison -->
-            <div v-if="selectedDeliveryMode === 'delivery'" class="space-y-3">
-                <h4 class="font-semibold text-[#4B2E1E]">Adresse de livraison</h4>
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                    <div class="text-sm text-blue-800">
-                        <i class="pi pi-info-circle mr-1"></i>
-                        Cette adresse sera utilisée uniquement pour les articles livrables. Les autres articles seront à récupérer aux adresses indiquées ci-dessus.
+            <!-- Adresse de livraison et sélection des quartiers -->
+            <div v-if="selectedDeliveryMode === 'delivery'" class="space-y-4">
+                <h4 class="font-semibold text-[#4B2E1E]">Informations de livraison</h4>
+
+                <!-- Sélection du quartier pour chaque restaurant -->
+                <div v-for="(restaurantData, restaurantId) in itemsByRestaurant" :key="`quartier-${restaurantId}`">
+                    <div v-if="deliveryAnalysis[restaurantId]?.hasDeliveryZones" class="bg-gray-50 p-3 rounded-lg border">
+                        <label class="block text-sm font-medium text-[#4B2E1E] mb-2">
+                            Quartier de livraison pour {{ restaurantData.name }}
+                        </label>
+                        <Dropdown
+                            v-model="selectedQuartiers[restaurantId]"
+                            :options="deliveryAnalysis[restaurantId].deliveryZones"
+                            optionLabel="quartier_nom"
+                            optionValue="quartier_id"
+                            placeholder="Sélectionnez votre quartier"
+                            class="w-full"
+                        >
+                            <template #value="slotProps">
+                                <div v-if="slotProps.value">
+                                    {{ deliveryAnalysis[restaurantId].deliveryZones.find(z => z.quartier_id === slotProps.value)?.quartier_nom }}
+                                    - {{ deliveryAnalysis[restaurantId].deliveryZones.find(z => z.quartier_id === slotProps.value)?.prix }} FCFA
+                                </div>
+                                <span v-else>{{ slotProps.placeholder }}</span>
+                            </template>
+                            <template #option="slotProps">
+                                <div class="flex justify-between items-center">
+                                    <span>{{ slotProps.option.quartier_nom }}</span>
+                                    <span class="font-semibold text-[#47A547]">{{ slotProps.option.prix }} FCFA</span>
+                                </div>
+                            </template>
+                        </Dropdown>
                     </div>
                 </div>
-                <div class="space-y-3">
-                    <InputText v-model="deliveryAddress.street" placeholder="Rue et numéro" class="w-full p-3" />
-                    <div class="grid grid-cols-2 gap-3">
-                        <InputText v-model="deliveryAddress.quartier" placeholder="Quartier" class="w-full p-3" />
-                        <InputText v-model="deliveryAddress.commune" placeholder="Commune" class="w-full p-3" />
-                    </div>
-                    <InputText v-model="deliveryAddress.phone" placeholder="Téléphone de contact" class="w-full p-3" />
+
+                <!-- Adresse détaillée -->
+                <div class="space-y-3 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h5 class="font-medium text-[#4B2E1E]">Adresse de livraison détaillée</h5>
+                    <InputText v-model="deliveryAddress.street" placeholder="Rue et numéro (ex: Rue des Jardins, Villa 123)" class="w-full p-3" />
+                    <InputText v-model="deliveryAddress.commune" placeholder="Commune (ex: Cocody, Plateau)" class="w-full p-3" />
+                    <InputText v-model="deliveryAddress.phone" placeholder="Téléphone de contact *" class="w-full p-3" />
                     <Textarea v-model="deliveryAddress.instructions" placeholder="Instructions de livraison (optionnel)" class="w-full" :rows="2" />
                 </div>
             </div>
 
             <!-- Moyens de paiement par restaurant -->
-            <div v-for="(items, restaurant) in itemsByRestaurant" :key="`payment-${restaurant}`" class="space-y-4">
-                <div class="bg-gray-50 p-4 rounded-lg">
+            <div v-for="(restaurantData, restaurantId) in itemsByRestaurant" :key="`payment-${restaurantId}`" class="space-y-4">
+                <div class="bg-gray-50 p-4 rounded-lg border-2 border-[#4B2E1E]/10">
                     <h4 class="font-semibold text-[#4B2E1E] border-b pb-2 mb-3">
-                        Paiement pour {{ restaurant }}
-                        <span class="text-[#47A547] font-bold">({{ totalsByRestaurant[restaurant]?.total }} FCFA)</span>
+                        Paiement pour {{ restaurantData.name }}
+                        <span class="text-[#47A547] font-bold">({{ formatAmount(totalsByRestaurant[restaurantId]?.total) }} FCFA)</span>
                     </h4>
 
-                    <!-- Explication du mode de paiement pour ce restaurant -->
-                    <div v-if="selectedDeliveryMode === 'delivery'" class="mb-4">
-                        <div v-if="totalsByRestaurant[restaurant]?.hasDelivery && totalsByRestaurant[restaurant]?.hasPickup" class="bg-yellow-50 border border-yellow-200 rounded p-2 text-sm text-yellow-800">
-                            <i class="pi pi-info-circle mr-1"></i>
-                            Ce restaurant a des articles à livrer ET à récupérer. Le paiement couvre les deux.
-                        </div>
-                        <div v-else-if="totalsByRestaurant[restaurant]?.hasDelivery" class="bg-green-50 border border-green-200 rounded p-2 text-sm text-green-800">
-                            <i class="pi pi-truck mr-1"></i>
-                            Tous les articles de ce restaurant seront livrés.
-                        </div>
-                        <div v-else class="bg-orange-50 border border-orange-200 rounded p-2 text-sm text-orange-800">
-                            <i class="pi pi-shopping-bag mr-1"></i>
-                            Articles à récupérer sur place uniquement.
-                        </div>
+                    <!-- Message si aucun moyen de paiement -->
+                    <div v-if="availablePaymentMethodsByRestaurant[restaurantId]?.length === 0" class="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800">
+                        <i class="pi pi-exclamation-circle mr-1"></i>
+                        Ce restaurateur n'a configuré aucun moyen de paiement. Veuillez le contacter.
                     </div>
 
-                    <div class="grid grid-cols-1 gap-3">
+                    <div v-else class="grid grid-cols-1 gap-3">
                         <!-- Méthodes de paiement disponibles pour ce restaurant -->
                         <div
-                            v-for="method in availablePaymentMethodsByRestaurant[restaurant]"
-                            :key="`${restaurant}-${method}`"
+                            v-for="method in availablePaymentMethodsByRestaurant[restaurantId]"
+                            :key="`${restaurantId}-${method.id}`"
                             class="border rounded-lg p-3 cursor-pointer transition-colors"
                             :class="{
-                                'border-[#47A547] bg-[#47A547]/5': selectedPaymentMethods[restaurant] === method,
-                                'border-gray-300': selectedPaymentMethods[restaurant] !== method
+                                'border-[#47A547] bg-[#47A547]/5': selectedPaymentMethods[restaurantId]?.id === method.id,
+                                'border-gray-300': selectedPaymentMethods[restaurantId]?.id !== method.id
                             }"
-                            @click="selectedPaymentMethods[restaurant] = method"
+                            @click="selectedPaymentMethods[restaurantId] = method"
                         >
                             <div class="flex items-center space-x-3">
                                 <div class="relative">
-                                    <input type="radio" :value="method" v-model="selectedPaymentMethods[restaurant]" class="w-4 h-4 text-[#47A547] border-gray-300 focus:ring-[#47A547]" />
+                                    <input
+                                        type="radio"
+                                        :value="method.id"
+                                        :checked="selectedPaymentMethods[restaurantId]?.id === method.id"
+                                        class="w-4 h-4 text-[#47A547] border-gray-300 focus:ring-[#47A547]"
+                                    />
                                 </div>
                                 <label class="flex-1 cursor-pointer">
-                                    <div class="flex items-center space-x-2">
-                                        <div
-                                            class="w-8 h-8 rounded flex items-center justify-center text-white text-sm"
-                                            :class="{
-                                                'bg-green-600': method === 'mobile_money',
-                                                'bg-orange-500': method === 'orange_money',
-                                                'bg-blue-600': method === 'wave',
-                                                'bg-gray-600': method.includes('cash')
-                                            }"
-                                        >
-                                            <i
-                                                :class="{
-                                                    'pi-mobile': method === 'mobile_money',
-                                                    'pi-wallet': method === 'orange_money',
-                                                    'pi-credit-card': method === 'wave',
-                                                    'pi-money-bill': method.includes('cash')
-                                                }"
-                                            ></i>
-                                        </div>
+                                    <div class="flex items-center justify-between">
                                         <div>
                                             <div class="font-medium text-[#4B2E1E]">
-                                                <span v-if="method === 'mobile_money'">Mobile Money</span>
-                                                <span v-else-if="method === 'orange_money'">Orange Money</span>
-                                                <span v-else-if="method === 'wave'">Wave</span>
-                                                <span v-else-if="method === 'cash_delivery'">Cash à la livraison</span>
-                                                <span v-else-if="method === 'cash_pickup'">Cash au retrait</span>
+                                                {{ getPaymentMethodDisplay(method, totalsByRestaurant[restaurantId]?.hasDelivery, totalsByRestaurant[restaurantId]?.hasPickup) }}
                                             </div>
-                                            <div class="text-sm text-gray-600">
-                                                <span v-if="method === 'mobile_money'">MTN Money, Moov Money</span>
-                                                <span v-else-if="method === 'orange_money'">Paiement sécurisé Orange</span>
-                                                <span v-else-if="method === 'wave'">Portefeuille électronique</span>
-                                                <span v-else-if="method === 'cash_delivery'">Payez en espèces au livreur</span>
-                                                <span v-else-if="method === 'cash_pickup'">Payez en espèces sur place</span>
+                                            <div v-if="method.numero_compte" class="text-sm text-gray-600 mt-1">
+                                                <i class="pi pi-phone mr-1"></i>
+                                                {{ method.numero_compte }}
+                                            </div>
+                                            <div v-if="method.nom_titulaire" class="text-xs text-gray-500">
+                                                {{ method.nom_titulaire }}
                                             </div>
                                         </div>
+                                        <i v-if="method.icon" :class="method.icon" class="text-2xl text-[#47A547]"></i>
                                     </div>
                                 </label>
                             </div>
@@ -586,33 +675,63 @@ watch(selectedDeliveryMode, () => {
                     </div>
 
                     <!-- Informations de paiement en ligne pour ce restaurant -->
-                    <div v-if="['mobile_money', 'orange_money', 'wave'].includes(selectedPaymentMethods[restaurant])" class="space-y-3 mt-4 p-4 bg-yellow-50 rounded-lg border">
-                        <h5 class="font-semibold text-[#4B2E1E]">Informations de paiement pour {{ restaurant }}</h5>
+                    <div
+                        v-if="selectedPaymentMethods[restaurantId] && (selectedPaymentMethods[restaurantId].type_paiement === 'mobile_money' || getPaymentType(selectedPaymentMethods[restaurantId].nom) !== 'cash')"
+                        class="space-y-3 mt-4 p-4 bg-yellow-50 rounded-lg border-2 border-yellow-300"
+                    >
+                        <h5 class="font-semibold text-[#4B2E1E]">Instructions de paiement</h5>
 
-                        <div class="bg-yellow-100 border border-yellow-200 rounded p-3">
+                        <div class="bg-yellow-100 border border-yellow-300 rounded p-3">
                             <div class="flex items-start space-x-2">
                                 <i class="pi pi-info-circle text-yellow-600 mt-0.5"></i>
                                 <div class="text-sm text-yellow-800">
-                                    <p class="font-medium mb-1">Instructions de paiement :</p>
-                                    <p>1. Composez le code de votre service de paiement mobile</p>
-                                    <p>
-                                        2. Effectuez le paiement de <strong>{{ totalsByRestaurant[restaurant]?.total }} FCFA</strong>
-                                    </p>
-                                    <p>3. Saisissez la référence de transaction ci-dessous</p>
+                                    <p class="font-medium mb-2">Pour payer {{ restaurantData.name }} :</p>
+                                    <ol class="list-decimal list-inside space-y-1">
+                                        <li>Composez le code de votre service de paiement mobile</li>
+                                        <li v-if="selectedPaymentMethods[restaurantId].numero_compte">
+                                            Envoyez <strong>{{ formatAmount(totalsByRestaurant[restaurantId]?.total) }} FCFA</strong> au numéro :
+                                            <strong class="text-[#47A547]">{{ selectedPaymentMethods[restaurantId].numero_compte }}</strong>
+                                        </li>
+                                        <li v-else>
+                                            Effectuez le paiement de <strong>{{ formatAmount(totalsByRestaurant[restaurantId]?.total) }} FCFA</strong>
+                                        </li>
+                                        <li>Notez la référence de transaction</li>
+                                        <li>Saisissez la référence ci-dessous</li>
+                                    </ol>
                                 </div>
                             </div>
                         </div>
 
                         <div class="space-y-3">
-                            <InputText v-model="paymentReferences[restaurant]" :placeholder="`Référence de transaction pour ${restaurant}`" class="w-full p-3" :class="{ 'p-invalid': errors[`${restaurant}_reference`] }" />
-                            <small v-if="errors[`${restaurant}_reference`]" class="text-red-500">
-                                {{ errors[`${restaurant}_reference`] }}
-                            </small>
+                            <div>
+                                <label class="block text-sm font-medium text-[#4B2E1E] mb-1">
+                                    Référence de transaction *
+                                </label>
+                                <InputText
+                                    v-model="paymentReferences[restaurantId]"
+                                    placeholder="Ex: MP241210.1234.A12345"
+                                    class="w-full p-3"
+                                    :class="{ 'p-invalid': errors[`${restaurantId}_reference`] }"
+                                />
+                                <small v-if="errors[`${restaurantId}_reference`]" class="text-red-500">
+                                    {{ errors[`${restaurantId}_reference`] }}
+                                </small>
+                            </div>
 
-                            <InputText v-model="paymentPhones[restaurant]" :placeholder="`Numéro utilisé pour le paiement chez ${restaurant}`" class="w-full p-3" :class="{ 'p-invalid': errors[`${restaurant}_phone`] }" />
-                            <small v-if="errors[`${restaurant}_phone`]" class="text-red-500">
-                                {{ errors[`${restaurant}_phone`] }}
-                            </small>
+                            <div>
+                                <label class="block text-sm font-medium text-[#4B2E1E] mb-1">
+                                    Numéro utilisé pour le paiement *
+                                </label>
+                                <InputText
+                                    v-model="paymentPhones[restaurantId]"
+                                    placeholder="Ex: 07 12 34 56 78"
+                                    class="w-full p-3"
+                                    :class="{ 'p-invalid': errors[`${restaurantId}_phone`] }"
+                                />
+                                <small v-if="errors[`${restaurantId}_phone`]" class="text-red-500">
+                                    {{ errors[`${restaurantId}_phone`] }}
+                                </small>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -620,8 +739,19 @@ watch(selectedDeliveryMode, () => {
 
             <!-- Actions -->
             <div class="flex space-x-3 pt-4 border-t sticky bottom-0 bg-white">
-                <Button label="Annuler" text class="flex-1 text-gray-600" @click="$emit('payment-cancel')" />
-                <Button label="Confirmer la commande" :loading="processing" class="flex-2 bg-[#47A547] hover:bg-[#3d8f3d] text-white p-3" @click="processPayment" :disabled="!canProceed" />
+                <Button
+                    label="Annuler"
+                    text
+                    class="flex-1 text-gray-600"
+                    @click="localVisible = false"
+                />
+                <Button
+                    label="Confirmer la commande"
+                    :loading="processing"
+                    class="flex-2 bg-[#47A547] hover:bg-[#3d8f3d] text-white p-3"
+                    @click="processPayment"
+                    :disabled="!canProceed"
+                />
             </div>
         </div>
     </Dialog>

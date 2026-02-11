@@ -1,9 +1,18 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
+import Avatar from 'primevue/avatar';
+import Button from 'primevue/button';
+import Card from 'primevue/card';
+import Dialog from 'primevue/dialog';
+import Divider from 'primevue/divider';
+import InputText from 'primevue/inputtext';
+import ProgressSpinner from 'primevue/progressspinner';
+import Textarea from 'primevue/textarea';
 import authService from '@/service/AuthService';
 
 const toast = useToast();
+const emit = defineEmits(['logout']);
 
 // États
 const loading = ref(false);
@@ -255,20 +264,8 @@ const changePassword = async () => {
 };
 
 // Déconnexion
-const handleLogout = async () => {
-    try {
-        await authService.logout();
-        toast.add({
-            severity: 'success',
-            summary: 'Déconnexion',
-            detail: 'Vous avez été déconnecté avec succès',
-            life: 3000
-        });
-        // Rediriger vers la page de connexion
-        window.location.href = '/login';
-    } catch (error) {
-        console.error('Erreur lors de la déconnexion:', error);
-    }
+const handleLogout = () => {
+    emit('logout');
 };
 
 // Initialisation
