@@ -1,13 +1,13 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
-import Dialog from 'primevue/dialog';
-import Button from 'primevue/button';
-import InputText from 'primevue/inputtext';
-import Password from 'primevue/password';
-import Message from 'primevue/message';
-import Divider from 'primevue/divider';
-import { useToast } from 'primevue/usetoast';
 import authService from '@/service/AuthService';
+import Button from 'primevue/button';
+import Dialog from 'primevue/dialog';
+import Divider from 'primevue/divider';
+import InputText from 'primevue/inputtext';
+import Message from 'primevue/message';
+import Password from 'primevue/password';
+import { useToast } from 'primevue/usetoast';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     visible: {
@@ -194,7 +194,7 @@ const handleRegister = async () => {
         // Afficher l'erreur via toast au lieu de errorMessage
         toast.add({
             severity: 'error',
-            summary: 'Erreur d\'inscription',
+            summary: "Erreur d'inscription",
             detail: error.message || 'Une erreur est survenue lors de la création du compte',
             life: 5000
         });
@@ -324,15 +324,6 @@ watch(
                     {{ isLoginMode ? "Vous n'avez pas de compte ?" : 'Vous avez déjà un compte ?' }}
                 </p>
                 <Button :label="isLoginMode ? 'Créer un compte' : 'Se connecter'" text class="text-[#47A547] hover:text-[#3d8b3d] font-semibold" @click="toggleMode" :disabled="isLoading" />
-            </div>
-
-            <!-- Connexion rapide pour demo -->
-            <div v-if="isLoginMode" class="mt-6 p-4 bg-gray-50 rounded-lg">
-                <p class="text-xs text-gray-600 mb-2">Pour tester rapidement :</p>
-                <p class="text-xs text-gray-500">
-                    Email: <strong>test@example.com</strong><br />
-                    Mot de passe: <strong>password</strong>
-                </p>
             </div>
         </div>
     </Dialog>
